@@ -2,6 +2,15 @@
 
 ## 安装依赖
 
+使用 uv 安装依赖（推荐）：
+
+```bash
+cd backend
+uv sync
+```
+
+或者使用传统的 pip：
+
 ```bash
 cd backend
 pip install -r requirements.txt
@@ -9,8 +18,16 @@ pip install -r requirements.txt
 
 ## 运行服务
 
+使用 uv 运行（推荐）：
+
 ```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uv run beauty-server
+```
+
+或者直接使用 uvicorn：
+
+```bash
+uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 服务启动后访问 http://localhost:8000/docs 查看API文档。
@@ -35,7 +52,8 @@ backend/
 │   ├── services/       # 业务逻辑
 │   └── utils/          # 工具函数
 ├── data/               # 数据存储
-└── requirements.txt
+├── pyproject.toml      # uv项目配置
+└── requirements.txt    # pip依赖（备用）
 ```
 
 ## API接口
@@ -66,3 +84,4 @@ backend/
 - **框架**: FastAPI
 - **AI处理**: MediaPipe + InsightFace + OpenCV
 - **数据库**: SQLite
+- **包管理**: uv

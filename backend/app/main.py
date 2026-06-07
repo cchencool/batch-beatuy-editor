@@ -63,3 +63,18 @@ async def root():
 async def health_check():
     """健康检查"""
     return {"status": "healthy"}
+
+
+def run():
+    """运行服务器（用于uv run命令）"""
+    import uvicorn
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True
+    )
+
+
+if __name__ == "__main__":
+    run()

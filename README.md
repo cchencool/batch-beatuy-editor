@@ -21,6 +21,7 @@
   - 皮肤分割: MediaPipe Selfie Segmentation
   - 磨皮算法: 表面模糊 (Surface Blur)
 - **数据库**: SQLite
+- **包管理**: uv
 
 ### 前端
 - **框架**: React 18 + TypeScript
@@ -34,18 +35,26 @@
 ### 环境要求
 - Python 3.10+
 - Node.js 18+
+- uv（Python包管理工具）
 - npm 或 pnpm
 
 ### 安装后端
 
+使用 uv 安装依赖（推荐）：
+
 ```bash
 cd backend
-pip install -r requirements.txt
+uv sync
 ```
 
 启动后端服务：
 ```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uv run beauty-server
+```
+
+或者使用 uvicorn 直接运行：
+```bash
+uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 访问 http://localhost:8000/docs 查看API文档。
@@ -85,7 +94,7 @@ beauty-project/
 │   │   ├── models/      # 数据模型
 │   │   └── main.py      # FastAPI入口
 │   ├── data/            # 数据存储
-│   └── requirements.txt
+│   └── pyproject.toml   # uv项目配置
 │
 ├── frontend/            # React前端
 │   ├── src/
