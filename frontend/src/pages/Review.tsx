@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Check, AlertTriangle, Maximize2, Download } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, AlertTriangle, Maximize2 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { tasksApi } from '../services/api';
@@ -90,7 +90,6 @@ export function Review() {
   }
 
   const currentResult = task.results[currentIndex];
-  const successResults = task.results.filter((r) => r.status === 'success');
 
   return (
     <div className="animate-fade-in">

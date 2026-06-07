@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, X, Play, RotateCcw, User, Image as ImageIcon, Settings2 } from 'lucide-react';
+import { Upload, X, Play, RotateCcw, User, Settings2 } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';

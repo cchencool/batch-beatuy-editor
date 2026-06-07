@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button';
 import { useAppStore } from '../stores/useAppStore';
 import { personsApi, tasksApi } from '../services/api';
-import type { Task, Person } from '../types';
+import type { Task } from '../types';
 
 export function Dashboard() {
   const navigate = useNavigate();

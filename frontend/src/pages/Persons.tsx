@@ -9,7 +9,7 @@ import { personsApi } from '../services/api';
 import type { Person } from '../types';
 
 export function Persons() {
-  const { persons, setPersons, addToast } = useAppStore();
+  const { persons, setPersons, addPerson, addToast } = useAppStore();
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [showAddDrawer, setShowAddDrawer] = useState(false);

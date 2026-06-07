@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useAppStore } from '../../stores/useAppStore';
+import { useAppStore } from '../stores/useAppStore';
 import { X, CheckCircle, AlertCircle, Info } from 'lucide-react';
 
 export function ToastContainer() {

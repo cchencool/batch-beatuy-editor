@@ -11,7 +11,7 @@ import {
   Menu,
   X,
 } from 'lucide-react';
-import { useAppStore } from '../../stores/useAppStore';
+import { useAppStore } from '../stores/useAppStore';
 import { useEffect, useState } from 'react';
 
 const navItems = [
@@ -60,7 +60,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     setTheme(themes[(currentIndex + 1) % themes.length]);
   };
 
-  const themeIcon = {
+  const themeIcon: Record<'light' | 'dark' | 'system', React.ReactNode> = {
     light: <Sun className="w-5 h-5" />,
     dark: <Moon className="w-5 h-5" />,
     system: <Monitor className="w-5 h-5" />,
