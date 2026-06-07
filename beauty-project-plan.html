@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>批量指定人员美颜功能 - 需求 &amp; 策划 &amp; 技术方案 &amp; 工作量评估</title>
+<style>
+  :root {
+    --bg: #f5f6fa;
+    --card: #ffffff;
+    --border: #e0e3eb;
+    --text: #1a1a2e;
+    --muted: #6c757d;
+    --accent: #4361ee;
+    --accent2: #3a0ca3;
+    --green: #2ec4b6;
+    --orange: #ff9f1c;
+    --red: #e63946;
+    --pink: #f72585;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    padding: 40px 20px;
+  }
+  .container { max-width: 1000px; margin: 0 auto; }
+
+  /* Cover */
+  .cover {
+    text-align: center;
+    padding: 60px 0 40px;
+  }
+  .cover h1 {
+    font-size: 2.4rem;
+    background: linear-gradient(135deg, var(--accent), var(--pink));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 12px;
+  }
+  .cover .meta { color: var(--muted); font-size: 0.95rem; }
+  .cover .meta span { margin: 0 12px; }
+
+  .toc {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 24px 32px;
+    margin: 32px 0;
+    border: 1px solid var(--border);
+  }
+  .toc h3 { margin-bottom: 12px; color: var(--accent2); }
+  .toc ol { margin-left: 20px; }
+  .toc li { margin-bottom: 4px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  /* Sections */
+  .section {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 32px;
+    margin: 32px 0;
+    border: 1px solid var(--border);
+  }
+  .section h2 {
+    font-size: 1.5rem;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 3px solid var(--accent);
+    display: inline-block;
+  }
+  .section h3 {
+    font-size: 1.15rem;
+    margin: 24px 0 12px;
+    color: var(--accent2);
+  }
+  .section h4 {
+    font-size: 1rem;
+    margin: 16px 0 8px;
+    color: var(--text);
+  }
+  .section p, .section li { color: #333; }
+
+  .tag {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .tag-p0 { background: #fce4ec; color: #c62828; }
+  .tag-p1 { background: #fff3e0; color: #e65100; }
+  .tag-p2 { background: #e3f2fd; color: #1565c0; }
+  .tag-p3 { background: #f3e5f5; color: #6a1b9a; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 0.9rem;
+  }
+  table th {
+    background: var(--accent);
+    color: #fff;
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 600;
+  }
+  table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  table tbody tr:hover { background: #f1f3ff; }
+
+  .flow-box {
+    background: #eef2ff;
+    border-radius: 10px;
+    padding: 20px;
+    margin: 16px 0;
+    border: 1px solid #c7d2fe;
+  }
+  .flow-box .step {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    text-align: center;
+    line-height: 28px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    margin-right: 8px;
+  }
+
+  .arch-box {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 16px 0;
+  }
+  .arch-mod {
+    flex: 1 1 180px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+    border: 1px solid var(--border);
+  }
+  .arch-mod .icon { font-size: 1.5rem; }
+  .arch-mod .name { font-weight: 600; margin: 6px 0 4px; }
+  .arch-mod .desc { font-size: 0.8rem; color: var(--muted); }
+
+  .compare-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    margin: 16px 0;
+  }
+  .compare-card {
+    border-radius: 10px;
+    padding: 20px;
+    border: 1px solid var(--border);
+  }
+  .compare-card h4 { margin-top: 0; }
+  .compare-card ul { margin: 8px 0 0 16px; font-size: 0.9rem; }
+  .compare-card ul li { margin-bottom: 4px; }
+
+  .warn-box {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin: 16px 0;
+    font-size: 0.9rem;
+  }
+  .warn-box strong { color: #856404; }
+
+  .est-table td:first-child { font-weight: 500; }
+
+  .footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-top: 48px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- Cover -->
+<div class="cover">
+  <h1>批量指定人员美颜功能</h1>
+  <p style="font-size:1.1rem;color:var(--muted);">需求计划 · 策划文档（含页面交互） · 技术方案 · 排序与持久化 · 工作量评估</p>
+  <div class="meta">
+    <span>项目: agent-test</span>
+    <span>日期: 2026-06-06</span>
+    <span>版本: v2.0</span>
+  </div>
+</div>
+
+<!-- TOC -->
+<div class="toc">
+  <h3>目录</h3>
+  <ol>
+    <li><a href="#req">需求文档</a></li>
+    <li><a href="#plan">策划文档（含页面与交互设计）</a></li>
+    <li><a href="#tech">技术方案选型</a></li>
+    <li><a href="#filing">文件与文件夹排序规范</a></li>
+    <li><a href="#persistence">配置持久化规范</a></li>
+    <li><a href="#est">工作量评估</a></li>
+    <li><a href="#risk">风险与里程碑</a></li>
+  </ol>
+</div>
+
+<!-- ========== 1. 需求文档 ========== -->
+<div class="section" id="req">
+<h2>一、需求文档</h2>
+
+<h3>1.1 项目背景</h3>
+<p>在批量人像照片处理场景中（如活动摄影、证件照批量处理、粉丝见面会照片等），需要对大量图片中的特定人员进行美颜处理（主要是磨皮），而图像中的其他人不做处理。需要一套自动化流程实现"指定人员检测 → 选择性美颜"。</p>
+
+<h3>1.2 用户故事</h3>
+<table>
+<thead><tr><th>ID</th><th>角色</th><th>用户故事</th><th>优先级</th></tr></thead>
+<tbody>
+  <tr>
+    <td>US-01</td><td>运营人员</td>
+    <td>上传一批活动照片，指定需要美颜的人员（提供该人员的正脸照片作为参考），系统自动找出包含该人员的照片并对其面部做磨皮处理</td>
+    <td><span class="tag tag-p0">P0</span></td>
+  </tr>
+  <tr>
+    <td>US-02</td><td>运营人员</td>
+    <td>支持同时指定多个人员（如团队照中多位核心成员），仅对他们做美颜，其他人保持原样</td>
+    <td><span class="tag tag-p0">P0</span></td>
+  </tr>
+  <tr>
+    <td>US-03</td><td>运营人员</td>
+    <td>可调节美颜强度（轻度/中度/重度磨皮），适应不同场景</td>
+    <td><span class="tag tag-p1">P1</span></td>
+  </tr>
+  <tr>
+    <td>US-04</td><td>运营人员</td>
+    <td>批量处理完成后，可预览每张图片的处理前后对比</td>
+    <td><span class="tag tag-p1">P1</span></td>
+  </tr>
+  <tr>
+    <td>US-05</td><td>运营人员</td>
+    <td>支持将处理后的图片批量导出，保持原始目录结构</td>
+    <td><span class="tag tag-p1">P1</span></td>
+  </tr>
+  <tr>
+    <td>US-06</td><td>运营人员</td>
+    <td>提供处理报告（处理成功数、失败数、未检测到目标的图片列表）</td>
+    <td><span class="tag tag-p2">P2</span></td>
+  </tr>
+</tbody>
+</table>
+
+<h3>1.3 功能列表</h3>
+<table>
+<thead><tr><th>模块</th><th>功能</th><th>说明</th><th>优先级</th></tr></thead>
+<tbody>
+  <tr><td>输入</td><td>目标人员注册</td><td>上传 1~N 张目标人员的正脸照片作为识别基准</td><td>P0</td></tr>
+  <tr><td>输入</td><td>批量图片导入</td><td>支持文件夹批量导入，支持 jpg/png/webp</td><td>P0</td></tr>
+  <tr><td>核心</td><td>人脸检测</td><td>检测所有图片中的人脸位置</td><td>P0</td></tr>
+  <tr><td>核心</td><td>人脸识别</td><td>将检测到的人脸与目标人员比对，确认身份</td><td>P0</td></tr>
+  <tr><td>核心</td><td>人脸分割</td><td>生成目标人员面部区域的精确 Mask（排除头发/耳朵/背景）</td><td>P0</td></tr>
+  <tr><td>核心</td><td>磨皮处理</td><td>对 Mask 区域应用磨皮算法</td><td>P0</td></tr>
+  <tr><td>配置</td><td>磨皮强度</td><td>可配置磨皮等级（参数预设或自定义）</td><td>P1</td></tr>
+  <tr><td>输出</td><td>批量导出</td><td>导出处理后的图片，保留原文件名和目录</td><td>P1</td></tr>
+  <tr><td>输出</td><td>对比预览</td><td>生成处理前后对比图</td><td>P1</td></tr>
+  <tr><td>输出</td><td>处理报告</td><td>输出 JSON/CSV 格式的处理报告</td><td>P2</td></tr>
+  <tr><td>扩展</td><td>GPU 加速</td><td>支持 CUDA 加速批量处理</td><td>P2</td></tr>
+</tbody>
+</table>
+
+<h3>1.4 核心流程</h3>
+<div class="flow-box">
+  <p><span class="step">1</span> 注册目标人员（提供参考照片）</p>
+  <p><span class="step">2</span> 提取目标人员 Face Embedding</p>
+  <p><span class="step">3</span> 遍历输入图片，检测所有图片中的人脸</p>
+  <p><span class="step">4</span> 将检测到的人脸 Embedding 与目标 Embedding 比对，筛选出目标人员</p>
+  <p><span class="step">5</span> 对目标人员的人脸区域生成皮肤 Mask（排除五官边界区域）</p>
+  <p><span class="step">6</span> 对 Mask 区域执行磨皮算法</p>
+  <p><span class="step">7</span> 输出处理后的图片 + 处理报告</p>
+</div>
+</div>
+
+<div class="section" id="plan">
+<h2>二、策划文档</h2>
+
+<h3>2.1 产品定位</h3>
+<p>一款命令行 + Web UI 的批量人像美颜工具，核心差异化：<strong>指定人员选择性美颜</strong>而非全图无差别处理。</p>
+
+<h3>2.2 目标用户</h3>
+<ul>
+  <li>活动 / 会议摄影师，需要批量精修主办方人员</li>
+  <li>粉丝站 / 后援会运营，处理大量活动图</li>
+  <li>企业内部宣传照片批量处理</li>
+  <li>证件照 / 肖像照批量精修</li>
+</ul>
+
+<h3>2.3 非功能性需求</h3>
+<table>
+<thead><tr><th>维度</th><th>要求</th></tr></thead>
+<tbody>
+  <tr><td>性能</td><td>100 张图（含 1~5 个人脸/张）批量处理 &le; 5 分钟（GPU）</td></tr>
+  <tr><td>精度</td><td>目标人员识别准确率 &ge; 95%（正脸参考照条件下）</td></tr>
+  <tr><td>健壮性</td><td>单人脸识别失败时不应中断整个批次</td></tr>
+  <tr><td>扩展性</td><td>支持后续增加美颜类型（美白、红润、去瑕疵等）</td></tr>
+  <tr><td>隐私</td><td>所有处理本地完成，不上传任何图片</td></tr>
+</tbody>
+</table>
+
+<h3>2.4 MVP 范围</h3>
+<p><strong>第一阶段（MVP）</strong> — 命令行工具，涵盖核心链路：</p>
+<ul>
+  <li>目标人员注册（提供参考照片目录）</li>
+  <li>批量图片人脸检测 + 识别</li>
+  <li>选择性皮肤磨皮</li>
+  <li>批量导出 + 简单报告</li>
+</ul>
+<p><strong>第二阶段</strong> — 增加 Web UI、多美颜类型、对比预览、GPU 加速</p>
+<p><strong>第三阶段</strong> — 视频帧处理、实时流处理、API 服务化</p>
+
+<h3>2.5 交付物</h3>
+<ul>
+  <li>Python CLI 工具（含完整 Source Code）</li>
+  <li>依赖清单 requirements.txt</li>
+  <li>README 使用文档 + 示例</li>
+  <li>处理报告样例</li>
+</ul>
+
+<hr style="margin:32px 0;border:none;border-top:2px dashed var(--border);">
+
+<!-- ====== 核心新增：页面设计与交互 ====== -->
+<h3>2.6 页面架构与导航</h3>
+<p>Web UI 采用单页应用（SPA）架构，全局导航栏 + 内容区的布局。应用不超过 6 个主要页面，保证用户可快速上手。</p>
+
+<div style="display:flex;flex-wrap:wrap;gap:16px;margin:16px 0;">
+  <div style="flex:1;min-width:160px;background:#f8f9fa;border-radius:10px;padding:16px;text-align:center;border:1px solid var(--border);">
+    <div style="font-size:1.8rem;">🏠</div>
+    <div style="font-weight:600;margin:4px 0;">仪表盘</div>
+    <div style="font-size:0.8rem;color:var(--muted);">概览 &amp; 快捷入口</div>
+  </div>
+  <div style="flex:1;min-width:160px;background:#f8f9fa;border-radius:10px;padding:16px;text-align:center;border:1px solid var(--border);">
+    <div style="font-size:1.8rem;">👤</div>
+    <div style="font-weight:600;margin:4px 0;">目标人员</div>
+    <div style="font-size:0.8rem;color:var(--muted);">注册/管理目标</div>
+  </div>
+  <div style="flex:1;min-width:160px;background:#f8f9fa;border-radius:10px;padding:16px;text-align:center;border:1px solid var(--border);">
+    <div style="font-size:1.8rem;">⚙️</div>
+    <div style="font-weight:600;margin:4px 0;">批量处理</div>
+    <div style="font-size:0.8rem;color:var(--muted);">核心工作台</div>
+  </div>
+  <div style="flex:1;min-width:160px;background:#f8f9fa;border-radius:10px;padding:16px;text-align:center;border:1px solid var(--border);">
+    <div style="font-size:1.8rem;">👁️</div>
+    <div style="font-weight:600;margin:4px 0;">预览审阅</div>
+    <div style="font-size:0.8rem;color:var(--muted);">对比 &amp; 确认</div>
+  </div>
+  <div style="flex:1;min-width:160px;background:#f8f9fa;border-radius:10px;padding:16px;text-align:center;border:1px solid var(--border);">
+    <div style="font-size:1.8rem;">📊</div>
+    <div style="font-weight:600;margin:4px 0;">处理报告</div>
+    <div style="font-size:0.8rem;color:var(--muted);">详情 &amp; 导出</div>
+  </div>
+</div>
+
+<h3>2.7 页面详述</h3>
+
+<!-- ===== 页面 A：仪表盘 ===== -->
+<h4>2.7.1 仪表盘（Dashboard）</h4>
+<table>
+<thead>
+  <tr><th style="width:120px;">维度</th><th>说明</th></tr>
+</thead>
+<tbody>
+  <tr><td>页面目的</td><td>提供全局概览，快速发起批量处理或查看近期结果</td></tr>
+  <tr><td>入口位置</td><td>应用首页，导航栏第一个标签</td></tr>
+</tbody>
+</table>
+
+<p><strong>核心功能：</strong></p>
+<ol>
+  <li><strong>统计卡片</strong> — 已注册目标人数、累计处理图片数、本周处理量、最后处理时间</li>
+  <li><strong>最近任务列表</strong> — 展示最近的 5~8 次批量处理任务（时间、目标人员、图片数、处理状态）</li>
+  <li><strong>快捷操作区</strong> — "新建批量处理"按钮（主按钮）、"注册新人员"辅按钮</li>
+  <li><strong>快速拖入区</strong> — 支持拖拽图片/文件夹到仪表盘直接进入批量处理流程</li>
+</ol>
+
+<p><strong>UI 元素清单：</strong></p>
+<table>
+<thead><tr><th>元素</th><th>类型</th><th>交互要求</th></tr></thead>
+<tbody>
+  <tr><td>统计卡片</td><td>卡片 × 4</td><td>数字实时更新，鼠标悬停可有微动效；点击可跳转到对应详情页</td></tr>
+  <tr><td>最近任务列表</td><td>列表行</td><td>每行显示任务名、时间、状态标签（进行中/完成/失败）、缩略图预览；点击行跳转报告页</td></tr>
+  <tr><td>"新建批量处理"按钮</td><td>Primary Button</td><td>全局最醒目的主按钮（蓝色/渐变色）；快捷键 Ctrl+N</td></tr>
+  <tr><td>拖入区域</td><td>虚线框 Dropzone</td><td>拖入时高亮并显示 + 号动画；支持多文件和文件夹；松开后直接进入批量处理页并自动填充导入区</td></tr>
+  <tr><td>空状态</td><td>占位插画</td><td>首次使用时显示引导插画 + 文字："开始你的第一次批量处理"，下方配"导入图片"和"注册人员"两个入口按钮</td></tr>
+</tbody>
+</table>
+
+<p><strong>状态与交互：</strong></p>
+<div class="warn-box">
+  <strong>空状态：</strong> 用户首次进入时，无任务记录。显示引导插画 + "开始你的第一次批量处理" 文案 + 两个入口按钮。不显示空白表格。<br>
+  <strong>加载态：</strong> 统计卡片显示骨架屏（Skeleton Loading），列表显示 4 行灰色占位条。<br>
+  <strong>错误态：</strong> 数据加载失败时显示重试按钮，不阻断其他模块。
+</div>
+
+<!-- ===== 页面 B：目标人员管理 ===== -->
+<h4>2.7.2 目标人员管理（Target Person Management）</h4>
+<table>
+<thead><tr><th style="width:120px;">维度</th><th>说明</th></tr></thead>
+<tbody>
+  <tr><td>页面目的</td><td>注册、查看、编辑、删除需要被美颜的目标人员</td></tr>
+  <tr><td>核心操作流</td><td>添加人员 → 上传参考照片 → 系统自动提取 Face Embedding → 保存</td></tr>
+</tbody>
+</table>
+
+<p><strong>核心功能：</strong></p>
+<ol>
+  <li><strong>人员列表</strong> — 展示所有已注册目标人员，支持搜索和排序</li>
+  <li><strong>添加人员</strong> — 输入姓名 + 上传 1~N 张正脸参考照片</li>
+  <li><strong>查看详情</strong> — 展示人员基本信息 + 参考照片缩略图 + 注册时间 + 被处理次数</li>
+  <li><strong>编辑人员</strong> — 修改姓名、增删参考照片</li>
+  <li><strong>删除人员</strong> — 删除后该人员不再被识别（软删除，关联的历史任务保留）</li>
+  <li><strong>试识别</strong> — 上传一张测试照片，系统立即返回是否匹配该人员及置信度</li>
+</ol>
+
+<p><strong>UI 元素清单：</strong></p>
+<table>
+<thead><tr><th>元素</th><th>类型</th><th>交互要求</th></tr></thead>
+<tbody>
+  <tr><td>人员卡片网格</td><td>卡片 Grid</td><td>每张卡片包含头像（参考照第一张）、姓名、照片数、最后使用时间；鼠标悬停放大阴影效果</td></tr>
+  <tr><td>搜索框</td><td>Input + 图标</td><td>支持实时搜索（输入即过滤，无需回车）；支持拼音模糊搜索</td></tr>
+  <tr><td>"添加人员"按钮</td><td>Primary Button</td><td>打开侧边滑出面板（Drawer），非弹窗，保持上下文</td></tr>
+  <tr><td>添加人员表单（Drawer）</td><td>表单</td><td>字段：姓名（必填）、备注（选填）、参考照片上传区（必填，支持多张）</td></tr>
+  <tr><td>照片上传区</td><td>Dropzone + 缩略图预览</td><td>支持点击选择或拖拽上传；上传后立即显示缩略图；每张可单独删除；至少 1 张且分辨率 &ge; 200×200</td></tr>
+  <tr><td>人员详情弹窗</td><td>Modal</td><td>"编辑"和"删除"按钮在底部操作栏；编辑时表单可修改；删除需二次确认（"确认删除 张三？此操作不可撤销"）</td></tr>
+  <tr><td>"试识别"按钮</td><td>Ghost Button</td><td>在人员详情或列表中均可操作；上传测试图→显示匹配结果和置信度百分比</td></tr>
+  <tr><td>人员头像</td><td>Avatar 组件</td><td>支持显示参考照第一张；无照片时显示姓名首字母圆形占位</td></tr>
+</tbody>
+</table>
+
+<p><strong>状态与交互：</strong></p>
+<div class="warn-box">
+  <strong>空状态：</strong> 无已注册人员时，显示插画 + "还没有目标人员，添加第一个人吧" + 大号"添加"按钮。<br>
+  <strong>上传中：</strong> 照片上传时显示进度条/旋转加载；全部上传完成自动关闭加载态。<br>
+  <strong>识别失败：</strong> 上传的照片中未检测到人脸时，Toast 提示"未检测到人脸，请更换照片"，不允许提交。<br>
+  <strong>试识别结果：</strong> 匹配成功 → 绿色标签 + "匹配成功，置信度 96.3%"；不匹配 → 橙色标签 + "未匹配到目标人员"。
+</div>
+
+<!-- ===== 页面 C：批量处理（核心页面） ===== -->
+<h4>2.7.3 批量处理工作台（Batch Processing）</h4>
+<table>
+<thead><tr><th style="width:120px;">维度</th><th>说明</th></tr></thead>
+<tbody>
+  <tr><td>页面目的</td><td>配置并执行批量处理任务，是整个应用的核心工作台</td></tr>
+  <tr><td>页面结构</td><td>左面板（配置区）+ 右面板（预览区）的二分栏布局</td></tr>
+</tbody>
+</table>
+
+<p><strong>核心功能：</strong></p>
+<ol>
+  <li><strong>导入图片</strong> — 选择文件夹或拖拽图片到导入区，展示文件列表（文件名、大小、预览缩略图）</li>
+  <li><strong>选择目标人员</strong> — 从已注册目标人员中选择一个或多个，支持全选/反选</li>
+  <li><strong>配置美颜参数</strong> — 磨皮强度滑杆、预设模式（轻度/中度/重度/自定义）</li>
+  <li><strong>执行处理</strong> — "开始处理" 主按钮，执行时显示实时进度</li>
+  <li><strong>实时进度</strong> — 进度条 + 当前处理图片缩略图 + 处理状态文字（"第 23/100 张"）</li>
+  <li><strong>中途暂停/取消</strong> — 处理过程中可暂停（Pause）或取消（Cancel），已处理部分保留</li>
+</ol>
+
+<p><strong>UI 元素清单：</strong></p>
+<table>
+<thead><tr><th>区域</th><th>元素</th><th>交互要求</th></tr></thead>
+<tbody>
+  <tr><td rowspan="4">左面板<br>配置区</td><td>图片导入区（Dropzone）</td><td>支持点击选择文件夹或拖拽；拖入时高亮 + "+" 动效；接受 jpg/png/webp；重复文件自动跳过并 Toast 提示</td></tr>
+  <tr><td>导入文件列表</td><td>紧凑列表：缩略图(48px) + 文件名 + 文件大小 + 删除按钮；支持批量清空；统计数字（"共 42 张图片"）</td></tr>
+  <tr><td>目标人员选择器</td><td>带搜索的多选下拉组件（Select+Multiple），选项显示已注册人员名 + 头像缩略图；已选人员以 Tag 形式展示在下方</td></tr>
+  <tr><td>参数配置面板</td><td>滑杆(Slider) 控制磨皮强度（0~100）+ 预设模式快速切换按钮组（轻度/中度/重度）；高级选项折叠面板：保护边缘强度、保留细节比例</td></tr>
+  <tr><td rowspan="3">右面板<br>预览区</td><td>缩略图画廊</td><td>以网格展示导入图片的缩略图；每张右下角标识"已检测到人脸数"；无检测到时显示灰色 "😶" 图标</td></tr>
+  <tr><td>单图放大预览（可选）</td><td>点击缩略图放大查看；支持滚轮缩放；如已处理过则显示处理前/后切换</td></tr>
+  <tr><td>进度指示器（处理后）</td><td>环形进度图 + "处理中" / "已完成" / "失败" 标签</td></tr>
+  <tr><td rowspan="2">底部<br>操作栏</td><td>"开始处理" 主按钮</td><td>蓝色主导按钮；禁用条件（未导入图片 或 未选择目标人员）；快捷键 Ctrl+Enter</td></tr>
+  <tr><td>"重置" 按钮</td><td>Ghost Button，清空当前配置但保留历史</td></tr>
+</tbody>
+</table>
+
+<p><strong>状态与交互：</strong></p>
+<div class="warn-box">
+  <strong>空状态：</strong> 左面板显示"拖拽图片到此处或点击选择文件夹"；右面板显示应用 Logo/引导图。<br>
+  <strong>处理中状态（关键状态）：</strong><br>
+  &nbsp;&nbsp;• 进度条 + 实时百分比（"58/100 张"）<br>
+  &nbsp;&nbsp;• 当前正在处理的图片缩略图在进度条上方闪烁<br>
+  &nbsp;&nbsp;• 已处理的图片在右侧画廊左下角显示绿色 ✓ 标记<br>
+  &nbsp;&nbsp;• 失败的图片显示红色 ✗ 标记，鼠标悬停显示失败原因<br>
+  &nbsp;&nbsp;• "开始处理"按钮变为 "暂停"（橙色）和 "取消"（红色）两个按钮<br>
+  <strong>处理完成：</strong> 进度条变为绿色 100%；"查看报告" 按钮出现；右下角弹出系统通知（如支持）。<br>
+  <strong>注意事项（防误操作）：</strong><br>
+  &nbsp;&nbsp;• 处理中不允许导入新图片或更改目标人员选择<br>
+  &nbsp;&nbsp;• 暂停后可以调整参数并"继续处理"（从暂停处恢复）<br>
+  &nbsp;&nbsp;• 页面刷新后未完成的任务状态应保留（IndexedDB/localStorage）<br>
+  &nbsp;&nbsp;• 导入大量图片（&gt;500 张）时弹出确认框："导入大量图片可能影响处理速度，是否继续？"
+</div>
+
+<!-- ===== 页面 D：预览审阅 ===== -->
+<h4>2.7.4 预览审阅（Review）</h4>
+<table>
+<thead><tr><th style="width:120px;">维度</th><th>说明</th></tr></thead>
+<tbody>
+  <tr><td>页面目的</td><td>批量对比处理前后效果，逐张确认或标记需重处理</td></tr>
+  <tr><td>进入方式</td><td>批量处理完成后自动跳转，或从报告页/任务列表进入</td></tr>
+</tbody>
+</table>
+
+<p><strong>核心功能：</strong></p>
+<ol>
+  <li><strong>对比查看</strong> — 左右对照（原图 / 处理后）或滑条拖动对比</li>
+  <li><strong>逐张审阅</strong> — 键盘方向键翻页浏览所有图片</li>
+  <li><strong>标记重处理</strong> — 对不满意的图片打标记，后续可批量重处理</li>
+  <li><strong>全屏模式</strong> — 进入全屏以获得更大对比视野</li>
+  <li><strong>批量导出</strong> — 确认后导出到指定目录</li>
+</ol>
+
+<p><strong>UI 元素清单：</strong></p>
+<table>
+<thead><tr><th>元素</th><th>交互要求</th></tr></thead>
+<tbody>
+  <tr><td>对比视图</td><td>默认左右并排（原图 | 处理后）；支持切换为"滑条模式"— 拖动中间分割线左右滑动查看；支持切换为"上下模式"</td></tr>
+  <tr><td>缩略图导航条</td><td>底部横排缩略图列表，当前查看的图片高亮；支持滚轮快速滚动；每张右下角标记状态（未审核/已确认/需重处理）</td></tr>
+  <tr><td>"确认" 按钮</td><td>当前图片标记为已确认；快捷键 Enter；确认后自动跳到下一张；已确认图片底部导航标记绿色 ✓</td></tr>
+  <tr><td>"需重处理" 按钮</td><td>当前图片标记为需重处理；快捷键 R；标记后底部导航标记橙色 ⚠️</td></tr>
+  <tr><td>放大/缩放</td><td>滚轮缩放 + 拖拽平移；双击重置为 100%</td></tr>
+  <tr><td>"全部导出" 按钮</td><td>导出所有已确认图片；未确认的图片弹窗提醒"还有 N 张未确认，是否跳过？"</td></tr>
+  <tr><td>"重处理已标记" 按钮</td><td>将所有标记"需重处理"的图片送回批量处理页，并保留之前参数</td></tr>
+  <tr><td>快捷键提示</td><td>页面底部或浮动显示：← → 翻页 | Enter 确认 | R 重处理 | F 全屏 | Esc 退出</td></tr>
+</tbody>
+</table>
+
+<p><strong>状态与交互：</strong></p>
+<div class="warn-box">
+  <strong>空状态（无处理后）：</strong> 不应当出现此页面，需先完成一次批量处理。<br>
+  <strong>全部确认后：</strong> 浮动提示"所有图片已确认，可导出" + 导出按钮放大。<br>
+  <strong>断点续审：</strong> 上次审查进度保存在本地（最后查看的图片索引），再次进入时提示"从上次位置继续？"<br>
+  <strong>对比滑条交互细节：</strong> 中间分割线跟随鼠标；分割线两侧显示标签"处理前" / "处理后"；鼠标移出对比区域后分割线停留在最后位置。
+</div>
+
+<!-- ===== 页面 E：处理报告 ===== -->
+<h4>2.7.5 处理报告（Report）</h4>
+<table>
+<thead><tr><th style="width:120px;">维度</th><th>说明</th></tr></thead>
+<tbody>
+  <tr><td>页面目的</td><td>给出本次批量处理的详细数据报告，支持导出</td></tr>
+  <tr><td>进入方式</td><td>处理完成后自动跳转、或从仪表盘最近任务列表进入</td></tr>
+</tbody>
+</table>
+
+<p><strong>核心功能：</strong></p>
+<ol>
+  <li><strong>任务摘要</strong> — 处理时间、图片总数、目标人员、美颜参数、消耗时长</li>
+  <li><strong>处理统计</strong> — 成功/失败/未检测到目标的图片数量 + 环形图可视化</li>
+  <li><strong>详细列表</strong> — 每张图片的处理结果（文件名、处理状态、检测到的人脸数、匹配到目标数、处理耗时）</li>
+  <li><strong>失败原因归类</strong> — 按错误类型分组展示（未检测到人脸 / 识别失败 / 处理异常）</li>
+  <li><strong>报告导出</strong> — 导出为 JSON / CSV / PDF</li>
+</ol>
+
+<p><strong>UI 元素清单：</strong></p>
+<table>
+<thead><tr><th>元素</th><th>交互要求</th></tr></thead>
+<tbody>
+  <tr><td>任务摘要区</td><td>卡片式布局：任务名称 + 时间戳 + 目标人员 Tag 列表 + 参数标签</td></tr>
+  <tr><td>统计环形图</td><td>Doughnut Chart，成功(绿) / 失败(红) / 未检测到(灰) 三色；中间显示成功率百分比</td></tr>
+  <tr><td>详细结果表格</td><td>可排序表格：文件名 | 人脸数 | 匹配目标数 | 处理耗时(ms) | 状态(成功/失败) | 失败原因 | 操作（预览跳转）</td></tr>
+  <tr><td>失败归类面板</td><td>折叠面板（Accordion），按错误类型展开查看具体图片列表</td></tr>
+  <tr><td>"导出报告" 按钮</td><td>Dropdown Button，下拉选择 JSON / CSV / PDF</td></tr>
+  <tr><td>"返回审阅" 按钮</td><td>Secondary Button，跳回预览审阅页</td></tr>
+  <tr><td>图片缩略图预览</td><td>表格中文件名旁显示 40px 微型缩略图；鼠标悬停放大为 120px Popover</td></tr>
+</tbody>
+</table>
+
+<p><strong>状态与交互：</strong></p>
+<div class="warn-box">
+  <strong>空错误（全部成功）：</strong> 环形图全绿，不显示失败归类面板。<br>
+  <strong>有失败项：</strong> 失败归类面板自动展开第一个分类；表格中失败行红色高亮。<br>
+  <strong>导出格式差异：</strong> JSON 包含完整数据、CSV 适合 Excel 打开、PDF 适合打印/分享。<br>
+  <strong>对比跳转：</strong> 点击表格中任意行可直接跳转到预览审阅页的对应图片。
+</div>
+
+<h3>2.8 全局交互设计规范</h3>
+
+<table>
+<thead><tr><th>维度</th><th>规范要求</th></tr></thead>
+<tbody>
+  <tr><td>全局导航</td><td>固定在顶部，包含应用名称 + Logo + 5 个页面入口 + 当前页高亮指示器；窄屏时折叠为汉堡菜单</td></tr>
+  <tr><td>响应式布局</td><td>桌面端全宽展示；平板端（&lt;1024px）侧边栏自动折叠；手机端（&lt;640px）转为单列堆叠布局</td></tr>
+  <tr><td>主题模式</td><td>支持亮色/暗色切换，默认跟随系统 (prefers-color-scheme)</td></tr>
+  <tr><td>快捷键盘</td><td>全局：Ctrl+N 新建任务、Ctrl+E 导出、/ 聚焦搜索；批量处理页：Ctrl+Enter 开始处理→暂停→继续</td></tr>
+  <tr><td>Toast 提示</td><td>所有操作反馈通过 Toast 展示（右上角，3 秒自动消失），无阻塞提示（不弹 Alert）</td></tr>
+  <tr><td>加载态</td><td>列表使用 Skeleton Screen 骨架屏；按钮加载中显示 Spinner + 禁用点击；图片加载显示渐变占位</td></tr>
+  <tr><td>空状态</td><td>每个列表/网格页在无数据时显示针对性插画 + 引导文案 + 操作按钮，不显示空表格</td></tr>
+  <tr><td>错误处理</td><td>网络错误 → Toast "网络连接失败，请重试"；处理错误 → 在图片上直接标记 ✗ + Tooltip 提示原因；全局错误 → 错误边界页面（Error Boundary）</td></tr>
+  <tr><td>操作确认</td><td>删除操作需二次确认弹窗；批量操作（如清空列表）需确认；不可逆操作红色警告</td></tr>
+  <tr><td>无障碍</td><td>所有可交互元素提供 aria-label；对比图片提供 alt 文本；键盘 Tab 顺序符合视觉顺序</td></tr>
+  <tr><td>本地持久化</td><td>用户配置、人员数据通过 localStorage 持久化；处理中任务状态通过 IndexedDB 持久化以防止刷新丢失</td></tr>
+</tbody>
+</table>
+
+<h3>2.9 用户操作流程总览</h3>
+
+<div class="flow-box">
+  <p><strong>典型用户旅程（首次使用）：</strong></p>
+  <p><span class="step">1</span> 打开应用 → 仪表盘空状态 → 点击"注册新人员"</p>
+  <p><span class="step">2</span> 目标人员页 → 点击"添加人员" → 填姓名 + 上传参考照片 → 保存</p>
+  <p><span class="step">3</span> 回到仪表盘 → 拖入图片文件夹 → 进入批量处理页</p>
+  <p><span class="step">4</span> 选择目标人员 → 调整磨皮强度 → 点击"开始处理"</p>
+  <p><span class="step">5</span> 等待处理完成 → 自动进入预览审阅页</p>
+  <p><span class="step">6</span> 逐张对比确认 → 全部确认后 → 点击"全部导出"</p>
+  <p><span class="step">7</span> 查看处理报告 → 导出 JSON/CSV 存档</p>
+</div>
+
+<div class="flow-box">
+  <p><strong>典型用户旅程（回头客）：</strong></p>
+  <p><span class="step">1</span> 仪表盘 → 统计卡片查看概况 → 点击"新建批量处理"</p>
+  <p><span class="step">2</span> 导入新图片 → 选择已有目标人员 → 直接使用上次参数（记忆功能）→ 开始处理</p>
+  <p><span class="step">3</span> 处理完成 → 审阅 → 导出</p>
+</div>
+
+<h3>2.10 UI 设计原则（供设计师参考）</h3>
+
+<table>
+<thead><tr><th>原则</th><th>说明</th></tr></thead>
+<tbody>
+  <tr><td>🎯 任务聚焦</td><td>批量处理页是核心，所有设计围绕让用户尽快完成"导入→选人→处理→导出"闭环</td></tr>
+  <tr><td>🤖 智能化默认</td><td>磨皮强度默认"中度"（多数场景最佳）；目标人员默认选中最近使用的</td></tr>
+  <tr><td>🌀 过程可见</td><td>批量处理中实时展示进度、状态、当前处理图片，不出现"正在处理..."这种黑盒提示</td></tr>
+  <tr><td>🔍 对比优先</td><td>预览审阅页的对比交互是体验核心，滑条对比模式应流畅顺滑，延迟 &lt; 16ms</td></tr>
+  <tr><td>🚫 安全第一</td><td>所有不可逆操作（删除、批量清空、覆盖导出）必须有二次确认；处理中防误操作</td></tr>
+  <tr><td>🧩 渐进披露</td><td>核心功能默认可见（选择人员、磨皮强度滑杆）；高级参数折叠隐藏（边缘保护、细节比例），需要时再展开</td></tr>
+  <tr><td>⌨️ 键盘友好</td><td>重度用户在批量审阅场景下应可完全脱离鼠标操作（方向键翻页 + Enter 确认 + R 标记重处理）</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="section" id="tech">
+<h2>三、技术方案选型</h2>
+
+<h3>3.1 整体架构</h3>
+<div class="arch-box">
+  <div class="arch-mod">
+    <div class="icon">📥</div>
+    <div class="name">输入层</div>
+    <div class="desc">目标照片注册<br>批量图片加载</div>
+  </div>
+  <div class="arch-mod">
+    <div class="icon">🔍</div>
+    <div class="name">检测层</div>
+    <div class="desc">人脸检测 +<br>人脸识别</div>
+  </div>
+  <div class="arch-mod">
+    <div class="icon">🎨</div>
+    <div class="name">处理层</div>
+    <div class="desc">皮肤分割 +<br>磨皮算法</div>
+  </div>
+  <div class="arch-mod">
+    <div class="icon">📤</div>
+    <div class="name">输出层</div>
+    <div class="desc">图片导出 +<br>处理报告</div>
+  </div>
+</div>
+
+<h3>3.2 方案对比与选型</h3>
+
+<h4>3.2.1 人脸检测</h4>
+<table>
+<thead><tr><th>方案</th><th>速度</th><th>精度</th><th>大小</th><th>许可证</th><th>评价</th></tr></thead>
+<tbody>
+  <tr>
+    <td>MediaPipe Face Detection</td>
+    <td>⭐⭐⭐⭐⭐</td><td>⭐⭐⭐⭐</td><td>~5MB</td><td>Apache-2.0</td>
+    <td><strong>推荐</strong>。跨平台，CPU/GPU 均可，移动端友好，精度足够</td>
+  </tr>
+  <tr>
+    <td>MTCNN</td><td>⭐⭐⭐</td><td>⭐⭐⭐⭐⭐</td><td>~3MB</td><td>MIT</td>
+    <td>经典方案，精度高但较慢，适合质量优先场景</td>
+  </tr>
+  <tr>
+    <td>RetinaFace</td><td>⭐⭐⭐</td><td>⭐⭐⭐⭐⭐</td><td>~100MB</td><td>MIT</td>
+    <td>高精度，包含关键点检测，适合要求高的场景</td>
+  </tr>
+  <tr>
+    <td>YOLOv8-face</td><td>⭐⭐⭐⭐⭐</td><td>⭐⭐⭐⭐⭐</td><td>~6MB</td><td>AGPL-3.0</td>
+    <td>速度与精度兼顾，但许可证需要注意商业使用</td>
+  </tr>
+</tbody>
+</table>
+
+<h4>3.2.2 人脸识别（指定人员匹配）</h4>
+<table>
+<thead><tr><th>方案</th><th>精度 (LFW)</th><th>Embedding 维度</th><th>许可证</th><th>评价</th></tr></thead>
+<tbody>
+  <tr>
+    <td>InsightFace (ArcFace)</td>
+    <td>99.8%+</td><td>512</td><td>MIT</td>
+    <td><strong>推荐</strong>。业界最佳之一，预训练模型丰富，Python API 友好</td>
+  </tr>
+  <tr>
+    <td>FaceNet (facenet-pytorch)</td>
+    <td>99.6%</td><td>128/512</td><td>MIT</td>
+    <td>经典方案，社区成熟，轻量</td>
+  </tr>
+  <tr>
+    <td>DeepFace</td>
+    <td>~97%</td><td>—</td><td>MIT</td>
+    <td>封装多种后端，使用方便但较重</td>
+  </tr>
+</tbody>
+</table>
+
+<h4>3.2.3 人脸皮肤分割</h4>
+<table>
+<thead><tr><th>方案</th><th>精度</th><th>速度</th><th>许可证</th><th>评价</th></tr></thead>
+<tbody>
+  <tr>
+    <td>MediaPipe Selfie Segmentation</td>
+    <td>⭐⭐⭐⭐</td><td>⭐⭐⭐⭐⭐</td><td>Apache-2.0</td>
+    <td><strong>推荐</strong>。速度快，CPU/GPU 均可，排除头发背景效果好</td>
+  </tr>
+  <tr>
+    <td>Face Parsing (BiseNet)</td>
+    <td>⭐⭐⭐⭐⭐</td><td>⭐⭐⭐</td><td>MIT</td>
+    <td>像素级人脸部件分割（皮肤/眉毛/眼/鼻/嘴），精度最高</td>
+  </tr>
+  <tr>
+    <td>dlib Face Landmarks + Mask</td>
+    <td>⭐⭐⭐</td><td>⭐⭐⭐⭐</td><td>BSL-1.0</td>
+    <td>基于 68 关键点生成凸包 Mask，简单快速但边缘较粗糙</td>
+  </tr>
+</tbody>
+</table>
+
+<h4>3.2.4 磨皮算法</h4>
+<table>
+<thead><tr><th>方案</th><th>效果</th><th>速度</th><th>实现复杂度</th><th>评价</th></tr></thead>
+<tbody>
+  <tr>
+    <td>双边滤波 + 细节叠加</td>
+    <td>⭐⭐⭐⭐</td><td>⭐⭐⭐</td><td>低</td>
+    <td><strong>推荐（MVP）</strong>。经典方案，效果可控，参数直观</td>
+  </tr>
+  <tr>
+    <td>导向滤波</td>
+    <td>⭐⭐⭐⭐</td><td>⭐⭐⭐⭐</td><td>低</td>
+    <td>边缘保持更好，速度优于双边滤波</td>
+  </tr>
+  <tr>
+    <td>表面模糊 (Surface Blur)</td>
+    <td>⭐⭐⭐⭐⭐</td><td>⭐⭐⭐</td><td>低</td>
+    <td>Photoshop 同款原理，效果自然</td>
+  </tr>
+  <tr>
+    <td>深度学习 (DNN 磨皮)</td>
+    <td>⭐⭐⭐⭐⭐</td><td>⭐⭐</td><td>高</td>
+    <td>效果最佳但需要训练数据和 GPU</td>
+  </tr>
+</tbody>
+</table>
+
+<h3>3.3 推荐技术栈</h3>
+<table>
+<thead><tr><th>模块</th><th>推荐方案</th><th>备用方案</th></tr></thead>
+<tbody>
+  <tr><td>编程语言</td><td>Python 3.10+</td><td>—</td></tr>
+  <tr><td>人脸检测</td><td>MediaPipe Face Detection (CPU 友好)</td><td>RetinaFace (高精度)</td></tr>
+  <tr><td>人脸识别</td><td>InsightFace / ArcFace</td><td>facenet-pytorch</td></tr>
+  <tr><td>皮肤分割</td><td>MediaPipe Selfie Segmentation</td><td>Face Parsing BiseNet</td></tr>
+  <tr><td>磨皮算法</td><td>表面模糊 (Surface Blur)</td><td>双边滤波 + 细节叠加</td></tr>
+  <tr><td>图像处理</td><td>OpenCV + NumPy</td><td>—</td></tr>
+  <tr><td>CLI 框架</td><td>Click / Typer</td><td>—</td></tr>
+  <tr><td>批处理加速</td><td>ThreadPoolExecutor + tqdm</td><td>CUDA 加速（P2）</td></tr>
+  <tr><td>报告输出</td><td>JSON + rich (终端表格)</td><td>—</td></tr>
+</tbody>
+</table>
+
+<h3>3.4 核心磨皮算法方案详述</h3>
+
+<h4>方案 A：表面模糊（Surface Blur）— 推荐</h4>
+<p>模拟 Photoshop 的表面模糊滤镜，在保留边缘的同时平滑皮肤区域：</p>
+<div class="flow-box">
+  <p>1. 计算每个像素邻域的色差权重</p>
+  <p>2. 对色差小于阈值的像素做高斯加权平均（平滑皮肤纹理）</p>
+  <p>3. 对色差大于阈值的像素保留原值（保护边缘如眼睛/眉毛/嘴唇）</p>
+  <p>4. 将模糊结果与 Mask 相乘，仅作用于皮肤区域</p>
+  <p>5. 可选的：叠加高频细节纹理保持真实感</p>
+</div>
+
+<h4>方案 B：双边滤波 + 高频叠加（快速 MVP）</h4>
+<div class="flow-box">
+  <p>1. 对全图应用双边滤波（bilateral filter），得到平滑层</p>
+  <p>2. 原图 - 平滑层 = 高频细节层（毛孔/纹理）</p>
+  <p>3. 以一定比例（如 30%~50%）衰减高频细节层</p>
+  <p>4. 平滑层 + 衰减后的高频层 = 磨皮结果</p>
+  <p>5. 通过 Mask 只应用到目标人员皮肤区域</p>
+</div>
+
+<h3>3.5 命令行接口设计（MVP）</h3>
+<div style="background:#f8f9fa;border-radius:8px;padding:16px;font-family:Menlo,monospace;font-size:0.85rem;margin:12px 0;">
+# 注册目标人员
+python beautify.py register --name "张三" --photos ./refs/zhangsan/*.jpg
+
+# 注册多个人员
+python beautify.py register --name "张三" --photos ./refs/zhangsan/*.jpg \
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;--name "李四" --photos ./refs/lisi/*.jpg
+
+# 批量处理
+python beautify.py process --input ./photos/ --output ./output/ \
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;--targets "张三" "李四" \
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;--strength medium \
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;--report ./report.json
+</div>
+
+<h3>3.6 关键技术决策说明</h3>
+
+<div class="warn-box">
+  <strong>为什么选择 MediaPipe 而非深度学习方案？</strong><br>
+  MediaPipe 在 CPU 上即可达到实时速度，无需 GPU，部署成本最低。对于 MVP 阶段，其检测精度（~99%+ 正脸）完全满足要求。后续可切换 RetinaFace 提升精度。
+</div>
+
+<div class="warn-box">
+  <strong>为什么选择表面模糊而非深度学习方法做磨皮？</strong><br>
+  MVP 阶段应优先保证可交付。表面模糊算法无需模型训练、无 GPU 依赖、参数直观（半径 + 阈值）、效果可控。DNN 磨皮作为 P2 后期迭代。
+</div>
+
+<div class="warn-box">
+  <strong>多人脸处理策略</strong><br>
+  单张图片中：对所有检测到的人脸进行识别 → 匹配目标人员 → 仅匹配成功的人脸做皮肤分割 + 磨皮 → 非目标人脸不做任何处理。这样可以保证同一张图中不同人员的差异化处理。
+</div>
+</div>
+
+<div class="section" id="filing">
+<h2>四、文件与文件夹排序规范</h2>
+<p class="section-desc">涵盖批量处理工作台中导入文件列表和预览审阅页缩略图导航条的排序规则，以及导出时目录结构的保持策略。</p>
+
+<h3>4.1 导入文件列表排序</h3>
+
+<table>
+<thead><tr><th style="width:130px;">维度</th><th>详细规范</th></tr></thead>
+<tbody>
+  <tr><td>默认排序</td><td>按<strong>文件名升序</strong>（自然序 Natural Sort）排列。自然序保证 <code>img2.jpg</code> 排在 <code>img10.jpg</code> 之前，而非字典序的 <code>img10 → img2</code>。</td></tr>
+  <tr><td>支持的排序方式</td><td>用户可通过列表表头点击切换排序：<br>
+  • 文件名升/降（自然序）<br>
+  • 文件大小升/降<br>
+  • 文件修改日期升/降<br>
+  • 文件类型/扩展名分组（.jpg / .png / .webp）</td></tr>
+  <tr><td>排序操作</td><td>点击表头切换排序 → 箭头指示方向（▲ 升序 / ▼ 降序）；首次点击升序，再次点击降序，第三次取消排序回到默认。当前排序列表头背景色微加深。</td></tr>
+  <tr><td>排序持久化</td><td>用户选择的排序方式和排序方向<strong>跨会话保留</strong>（存入 localStorage），下次导入新图片列表时沿用上次的排序偏好，直到用户主动更改。</td></tr>
+</tbody>
+</table>
+
+<h3>4.2 文件夹导入与结构展示</h3>
+
+<table>
+<thead><tr><th style="width:130px;">维度</th><th>详细规范</th></tr></thead>
+<tbody>
+  <tr><td>导入方式</td><td>支持两种导入方式，<strong>优先推荐选择文件夹</strong>（保持目录结构）：</td></tr>
+  <tr><td>文件夹导入</td><td>• 选择文件夹后，<strong>递归扫描</strong>所有子目录中的图片文件<br>
+  • 导入列表中每行增加"相对路径"列，显示如 <code>2025/group/</code> 的路径前缀<br>
+  • 支持按<strong>源文件夹分组</strong>展示（Group by folder），同一文件夹的图片连续排列，分组间有分隔线/分组标题<br>
+  • 分组标题显示文件夹名和该文件夹图片数量（如 "2025/group/ (12 张)"）<br>
+  • 分组可折叠/展开</td></tr>
+  <tr><td>拖拽/多文件导入</td><td>• 用户从不同位置拖入多张图片时，文件平铺展示，不保留来源路径信息<br>
+  • 文件列表头部显示提示："来自 N 个不同位置"</td></tr>
+  <tr><td>混合导入处理</td><td>• 如果用户同时拖拽了文件又选择了文件夹，所有文件合并展示<br>
+  • 有文件夹来源的图片显示相对路径，无来源的图片路径列显示 "-"</td></tr>
+  <tr><td>目录结构保持</td><td>• 导出时默认<strong>完整保持</strong>导入时的目录结构<br>
+  • 文件夹导入→导出时子目录结构不变<br>
+  • 散文件拖入→导出时统一放在输出根目录<br>
+  • 用户可在导出前预览目录结构树</td></tr>
+  <tr><td>重复文件检测</td><td>• 依据 <code>文件名 + 文件大小 + 最后修改时间</code> 三元组判断重复<br>
+  • 重复文件自动跳过，列表底部 Toast "已跳过 N 个重复文件"<br>
+  • 不同文件夹下的同名文件视为不同文件（因路径不同）</td></tr>
+  <tr><td>文件过滤</td><td>• 默认只显示支持的图片格式（jpg/jpeg/png/webp）<br>
+  • 列表中提供"显示全部/仅图片"切换按钮<br>
+  • 非图片文件（如 .txt .raw）在列表中隐藏，不影响处理</td></tr>
+</tbody>
+</table>
+
+<h3>4.3 预览审阅页排序</h3>
+
+<table>
+<thead><tr><th style="width:130px;">维度</th><th>详细规范</th></tr></thead>
+<tbody>
+  <tr><td>缩略图导航条排序</td><td>默认与<strong>导入时的文件列表顺序一致</strong>，保证用户在导入列表和预览页之间看到的是同一顺序。</td></tr>
+  <tr><td>排序切换</td><td>预览页底部提供排序切换下拉菜单：<br>
+  • 按文件名（与导入列表一致）<br>
+  • 按处理状态（待确认 → 已确认 → 需重处理）<br>
+  • 按人脸检测数（多人脸优先）<br>
+  • 手动排序（保持用户拖拽重排的结果）</td></tr>
+  <tr><td>手动拖拽排序</td><td>• 支持鼠标拖拽缩略图调整审阅顺序<br>
+  • 拖拽时其他缩略图自动让位，动画过渡<br>
+  • 手动排序优先级最高，切换其他排序方式后丢失手动顺序</td></tr>
+</tbody>
+</table>
+
+<h3>4.4 空状态与边界情况</h3>
+
+<div class="warn-box">
+  <strong>无图片文件夹：</strong> 选择的文件夹中没有任何支持的图片格式 → 弹窗提示"所选文件夹中未找到图片文件（支持 jpg/png/webp）"。<br>
+  <strong>大量文件（&gt;1,000 张）：</strong> 导入时弹出进度条"正在扫描文件…" + 分批渲染列表（Virtual Scroll），避免页面卡顿。<br>
+  <strong>权限不足：</strong> 无法读取某些子文件夹 → 跳过该文件夹 + 在报告中标明"N 个文件夹因权限跳过"。<br>
+  <strong>文件名编码异常：</strong> 无法解析的文件名用十六进制 hash 代替显示，不阻断整体导入。
+</div>
+</div>
+
+<div class="section" id="persistence">
+<h2>五、配置持久化规范</h2>
+<p class="section-desc">定义系统所有需要持久化的数据、存储层级、存储策略和恢复逻辑。持久化分三层：应用全局配置、任务配置、运行时状态。</p>
+
+<h3>5.1 持久化数据总览</h3>
+
+<table>
+<thead><tr><th>分类</th><th>数据项</th><th>存储位置</th><th>生命周期</th></tr></thead>
+<tbody>
+  <tr><td rowspan="5"><strong>全局配置</strong><br>（用户级）</td><td>主题模式（亮色/暗色/跟随系统）</td><td>localStorage</td><td>永久，主动更改前保留</td></tr>
+  <tr><td>默认磨皮参数（强度/边缘保护/细节保留）</td><td>localStorage</td><td>永久，覆盖式更新</td></tr>
+  <tr><td>默认导出路径（上次选择的输出文件夹路径）</td><td>localStorage</td><td>永久，跨会话</td></tr>
+  <tr><td>上次选择的排序偏好</td><td>localStorage</td><td>永久</td></tr>
+  <tr><td>UI 布局偏好（面板宽度、折叠状态等）</td><td>localStorage</td><td>永久</td></tr>
+  <tr><td rowspan="2"><strong>人员数据</strong><br>（用户级）</td><td>注册人员列表（姓名、备注、参考照 paths / base64、Face Embedding 缓存路径）</td><td>IndexedDB</td><td>明确删除前保留</td></tr>
+  <tr><td>人员被处理次数、最后处理时间</td><td>IndexedDB</td><td>随人员数据更新</td></tr>
+  <tr><td rowspan="3"><strong>任务配置</strong><br>（会话级）</td><td>最近一次批量处理参数（目标人员列表、磨皮强度、高级参数）</td><td>localStorage</td><td>跨会话，仅保留最近一次</td></tr>
+  <tr><td>最近 N 次任务历史摘要（时间、目标、图片数、成功/失败率）</td><td>IndexedDB</td><td>保留最近 50 条</td></tr>
+  <tr><td>用户保存的"预设"（命名的参数模板）</td><td>IndexedDB</td><td>明确删除前保留</td></tr>
+  <tr><td rowspan="3"><strong>运行时状态</strong><br>（会话级）</td><td>当前未完成的任务状态（已处理的图片列表、暂停位置、参数快照）</td><td>IndexedDB</td><td>任务完成后自动清除</td></tr>
+  <tr><td>预览审阅进度（当前浏览到第几张）</td><td>sessionStorage</td><td>仅当前浏览器标签页</td></tr>
+  <tr><td>图片处理缓存的缩略图（避免重复生成）</td><td>IndexedDB Blob</td><td>LRU 淘汰，最多 500 张</td></tr>
+</tbody>
+</table>
+
+<h3>5.2 存储策略选择依据</h3>
+
+<table>
+<thead><tr><th>存储方式</th><th>适用场景</th><th>容量限制</th><th>优点</th><th>缺点</th></tr></thead>
+<tbody>
+  <tr><td><strong>localStorage</strong></td><td>轻量 KV 配置（布尔值、数字、短字符串）</td><td>~5MB</td><td>同步 API，简单可靠</td><td>只能存字符串，不适合复杂结构和大数据</td></tr>
+  <tr><td><strong>sessionStorage</strong></td><td>临时会话状态（无需跨标签页保留）</td><td>~5MB</td><td>标签页关闭自动清理</td><td>不跨会话</td></tr>
+  <tr><td><strong>IndexedDB</strong></td><td>结构化数据、Blob 文件、大体积对象</td><td>~GB 级</td><td>异步 API，支持索引和事务，存储空间大</td><td>API 复杂，需封装</td></tr>
+  <tr><td><strong>文件系统</strong>（Electron/PWA）</td><td>Face Embedding 模型缓存、导出配置到本地文件</td><td>无限制</td><td>用户可见、可迁移</td><td>需文件系统权限</td></tr>
+</tbody>
+</table>
+
+<h3>5.3 配置读写规则</h3>
+
+<table>
+<thead><tr><th>规则</th><th>说明</th></tr></thead>
+<tbody>
+  <tr><td>写入时机</td><td><strong>实时写入</strong>。用户更改任何配置项后立即持久化（非"保存按钮"模式）。例如：拖动磨皮滑杆时，松开鼠标即写入 localStorage。</td></tr>
+  <tr><td>读取时机</td><td>应用启动时一次性加载全局配置到内存；运行时通过内存读写，写入时同步持久化。</td></tr>
+  <tr><td>写入节流</td><td>高频变化的配置（如滑杆拖动、窗口宽度）做 300ms 防抖写入，避免频繁 I/O。</td></tr>
+  <tr><td>读写失败处理</td><td>写入失败 → 静默重试一次 → 失败则 console.warn 不阻塞用户操作；读取失败 → 使用内置默认值，不影响应用启动。</td></tr>
+  <tr><td>数据迁移</td><td>配置结构可能随版本更新变化。在读取时检查 schema 版本号（存储在 localStorage / IndexedDB 的版本字段），不匹配时执行迁移函数或丢弃旧数据回退到默认值。</td></tr>
+  <tr><td>防篡改</td><td>localStorage 中的配置不做防篡改（用户自行修改不导致功能性错误）；IndexedDB 中的人员数据不暴露直接编辑入口，通过应用内表单修改。</td></tr>
+</tbody>
+</table>
+
+<h3>5.4 任务参数回记忆（核心体验）</h3>
+
+<div class="flow-box">
+  <p><strong>场景：</strong>用户昨天处理了 100 张图，今天要处理另一批图片，目标人员相同、参数类似。</p>
+  <p><span class="step">1</span> 用户进入批量处理页 → 导入新图片</p>
+  <p><span class="step">2</span> 目标人员选择器自动勾选<strong>上次使用的目标人员</strong>（右上角显示"沿用上次"标签）</p>
+  <p><span class="step">3</span> 磨皮强度滑杆定位到<strong>上次使用的值</strong>（滑杆下方显示小字"上次：中度 | 边缘保护 70%"）</p>
+  <p><span class="step">4</span> 用户可直接点击"开始处理"，无需重新配置</p>
+  <p><span class="step">5</span> 如果用户主动调整参数，则更新记忆为新值</p>
+</div>
+
+<table>
+<thead><tr><th>记忆项</th><th>存储方式</th><th>保留策略</th></tr></thead>
+<tbody>
+  <tr><td>上次选中的目标人员 ID 列表</td><td>localStorage JSON 数组</td><td>仅保留最近一次任务，新任务覆盖旧任务</td></tr>
+  <tr><td>上次使用的磨皮参数（强度 + 高级参数）</td><td>localStorage 对象</td><td>同上，覆盖式</td></tr>
+  <tr><td>上次导出路径</td><td>localStorage 字符串</td><td>永久保留，直到用户更改</td></tr>
+  <tr><td>上次选择的排序方式</td><td>localStorage 对象</td><td>永久保留</td></tr>
+  <tr><td>上次导入方式（文件夹/拖拽）</td><td>localStorage（仅记录偏好）</td><td>跨会话，用于默认展示文件分组方式</td></tr>
+</tbody>
+</table>
+
+<h3>5.5 预设（Preset）管理</h3>
+
+<table>
+<thead><tr><th style="width:120px;">维度</th><th>详细规范</th></tr></thead>
+<tbody>
+  <tr><td>什么是预设</td><td>用户保存的一组命名的完整参数配置，包含：磨皮强度 + 边缘保护 + 细节保留 + 目标人员列表（可选）。可用于在不同场景间快速切换。</td></tr>
+  <tr><td>预设交互</td><td>• 在批量处理页参数区旁增加"预设"按钮 → 打开预设管理 Drawer<br>
+  • Drawer 中展示预设列表（名称 + 参数摘要）<br>
+  • "保存当前为预设" 按钮 → 弹出命名输入框 → 保存到 IndexedDB<br>
+  • 点击预设 → 立即应用参数到当前配置<br>
+  • "管理预设" → 编辑名称 / 删除 / 导出为 JSON 文件</td></tr>
+  <tr><td>内置预设</td><td>• 系统出厂预设："轻度磨皮"（强度 30, 边缘 90, 细节 80）、"中度磨皮"（强度 55, 边缘 75, 细节 60）、"重度磨皮"（强度 80, 边缘 60, 细节 40）<br>
+  • 内置预设不可删除，但可基于内置预设保存为用户自定义预设</td></tr>
+  <tr><td>预设导入/导出</td><td>• 导出预设为 JSON 文件（包含版本号、创建时间、参数）<br>
+  • 导入 JSON 预设文件，导入时校验版本兼容性<br>
+  • 支持分享预设文件给其他用户</td></tr>
+  <tr><td>预设存储</td><td>IndexedDB 的 presets 表，每条记录包含：id, name, params (JSON), isBuiltin, createdAt, updatedAt, version</td></tr>
+</tbody>
+</table>
+
+<h3>5.6 会话恢复（Crash Recovery）</h3>
+
+<table>
+<thead><tr><th>场景</th><th>恢复行为</th></tr></thead>
+<tbody>
+  <tr><td>页面刷新（未完成处理）</td><td>• 刷新后进入仪表盘，右上角出现橙色横幅："有未完成的批量处理任务，是否恢复？"<br>
+  • 点击"恢复" → 跳转到批量处理页，进度和数据完全恢复（包括已处理的图片）<br>
+  • 点击"放弃" → 清除 IndexedDB 中的任务状态数据</td></tr>
+  <tr><td>浏览器崩溃</td><td>• IndexedDB 中的数据不会丢失<br>
+  • 下次打开应用时同样显示恢复横幅<br>
+  • 如果状态数据损坏 → 横幅显示"上次任务状态异常，已自动清理"</td></tr>
+  <tr><td>处理过程中关闭标签页</td><td>• 后台处理线程（Web Worker）通知 onbeforeunload 事件<br>
+  • 在 beforeunload 中提示"处理尚未完成，确定离开？"<br>
+  • 用户确认离开 → 状态持久化到 IndexedDB</td></tr>
+  <tr><td>并发的浏览标签页</td><td>• 同一应用在多个标签页打开时，以最后一个写入 IndexedDB 的数据为准<br>
+  • 不鼓励多标签页同时使用，检测到多标签页时提示"该应用已在其他标签页打开"</td></tr>
+  <tr><td>配置数据损坏</td><td>• localStorage 单字段损坏 → 丢弃该字段，使用默认值<br>
+  • IndexedDB 数据库损坏 → 重建空数据库，不阻塞启动</td></tr>
+</tbody>
+</table>
+
+<h3>5.7 存储目录结构（文件系统导出时）</h3>
+
+<div style="background:#f8f9fa;border-radius:8px;padding:16px;font-family:Menlo,monospace;font-size:0.85rem;margin:12px 0;">
+output_dir/<br>
+├── 2025-06-06_活动照片_15-30-22/ &nbsp;&nbsp;&lt;-- 任务根目录（日期 + 任务名 + 时间戳）<br>
+│&nbsp;&nbsp; ├── config.json &nbsp;&nbsp;&lt;-- 本次任务参数快照<br>
+│&nbsp;&nbsp; ├── report.json &nbsp;&nbsp;&lt;-- 处理结果报告<br>
+│&nbsp;&nbsp; ├── processed/ &nbsp;&nbsp;&lt;-- 处理后的图片<br>
+│&nbsp;&nbsp; │&nbsp;&nbsp; ├── IMG_0001.jpg<br>
+│&nbsp;&nbsp; │&nbsp;&nbsp; ├── IMG_0002.jpg<br>
+│&nbsp;&nbsp; │&nbsp;&nbsp; └── subfolder/ &nbsp;&nbsp;&lt;-- 保持原始子目录结构<br>
+│&nbsp;&nbsp; │&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; └── IMG_0003.jpg<br>
+│&nbsp;&nbsp; ├── originals/ &nbsp;&nbsp;&lt;-- 原始图片副本（可选，配置项决定是否保留）<br>
+│&nbsp;&nbsp; │&nbsp;&nbsp; └── ...<br>
+│&nbsp;&nbsp; └── previews/ &nbsp;&nbsp;&lt;-- 对比预览图（原图+处理后 并排）<br>
+│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; └── ...<br>
+└── 2025-06-05_团队照_10-20-05/<br>
+&nbsp;&nbsp;&nbsp;&nbsp; └── ...
+</div>
+
+<p><strong>导出结构关键规则：</strong></p>
+<ul>
+  <li>每次批量处理导出一个独立目录，避免文件冲突</li>
+  <li>目录名格式：<code>YYYY-MM-DD_任务名_HH-mm-ss</code>（任务名由用户输入或自动从导入文件夹名推断）</li>
+  <li>导出目录中附带 <code>config.json</code>（本次任务参数快照）+ <code>report.json</code>（处理报告）</li>
+  <li>预处理图片子目录结构保持与输入一致；散文件导入时"平铺"到 processed 根目录</li>
+  <li>用户可选择"不保留原图副本"（节省磁盘空间）或"保留原图 + 对比图"</li>
+</ul>
+</div>
+
+<div class="section" id="est">
+<h2>六、工作量评估</h2>
+
+<h3>6.1 传统人工开发工作量</h3>
+<table class="est-table">
+<thead><tr><th>模块</th><th>子任务</th><th>预估人天</th><th>技能要求</th></tr></thead>
+<tbody>
+  <tr><td rowspan="2">项目骨架</td><td>项目初始化、CLI 框架搭建（Click/Typer）</td><td>0.5</td><td>Python 基础</td></tr>
+  <tr><td>目录结构设计、配置管理</td><td>0.5</td><td>软件工程</td></tr>
+  <tr><td rowspan="3">人脸检测</td><td>集成 MediaPipe Face Detection</td><td>0.5</td><td>OpenCV + MediaPipe</td></tr>
+  <tr><td>人脸裁剪 + 对齐预处理</td><td>0.5</td><td>图像处理</td></tr>
+  <tr><td>多人脸场景的遍历与候选框管理</td><td>0.5</td><td>—</td></tr>
+  <tr><td rowspan="2">人脸识别</td><td>集成 InsightFace，提取 Embedding</td><td>1</td><td>InsightFace API</td></tr>
+  <tr><td>余弦相似度比对 + 阈值调优</td><td>0.5</td><td>逻辑 + 实验</td></tr>
+  <tr><td rowspan="2">皮肤分割</td><td>集成 MediaPipe Selfie Segmentation</td><td>0.5</td><td>MediaPipe</td></tr>
+  <tr><td>Mask 精细化处理（边缘羽化、形态学操作）</td><td>0.5</td><td>OpenCV 形态学</td></tr>
+  <tr><td rowspan="2">磨皮算法</td><td>表面模糊算法实现</td><td>1</td><td>图像处理算法</td></tr>
+  <tr><td>磨皮强度参数调优</td><td>0.5</td><td>实验调试</td></tr>
+  <tr><td rowspan="2">批量处理链路</td><td>多线程批量处理管线</td><td>1</td><td>并发编程</td></tr>
+  <tr><td>进度条 + 错误处理 + 断点续传</td><td>0.5</td><td>—</td></tr>
+  <tr><td rowspan="2">输入输出</td><td>目标人员注册、存储（JSON/YAML）</td><td>0.5</td><td>—</td></tr>
+  <tr><td>批量导出、目录结构保持</td><td>0.5</td><td>—</td></tr>
+  <tr><td>报告</td><td>处理报告生成（JSON + 终端表格）</td><td>0.5</td><td>—</td></tr>
+  <tr><td>测试</td><td>单元测试 + 集成测试 + 测试数据集准备</td><td>1.5</td><td>测试</td></tr>
+  <tr><td>文档</td><td>README + 使用文档 + 参数说明</td><td>1</td><td>文档撰写</td></tr>
+  <tr><td>优化</td><td>性能调优、边缘 case 处理</td><td>1</td><td>优化经验</td></tr>
+  <tr><td colspan="2"><strong>合计（MVP）</strong></td><td><strong>~13 人天</strong></td><td>—</td></tr>
+</tbody>
+</table>
+
+<p style="margin-top:12px;">传统开发总预估：<strong>13 ~ 16 人天</strong>（含 20% Buffer）</p>
+
+<h3>6.2 AI Agent 编程工作量（Token 开销估算）</h3>
+
+<p>以下基于使用 AI Agent（如 Claude / GPT-4 类模型）辅助编程的预估 Token 消耗。假设 Agent 具备代码生成、调试、文件读写能力。</p>
+
+<table class="est-table">
+<thead><tr><th>阶段</th><th>子任务</th><th>预估回合数</th><th>每轮 Input Tokens</th><th>每轮 Output Tokens</th><th>总 Tokens</th></tr></thead>
+<tbody>
+  <tr><td rowspan="2">需求 &amp; 设计</td><td>理解需求、生成策划文档</td><td>3~5</td><td>4K</td><td>2K</td><td>~30K</td></tr>
+  <tr><td>技术方案确认、选定依赖</td><td>2~3</td><td>3K</td><td>1.5K</td><td>~15K</td></tr>
+  <tr><td rowspan="4">代码生成</td><td>项目骨架 + CLI 框架</td><td>2~3</td><td>3K</td><td>3K</td><td>~18K</td></tr>
+  <tr><td>人脸检测模块</td><td>3~5</td><td>4K</td><td>3K</td><td>~35K</td></tr>
+  <tr><td>人脸识别模块</td><td>3~5</td><td>4K</td><td>3K</td><td>~35K</td></tr>
+  <tr><td>磨皮算法 + Mask 处理</td><td>4~6</td><td>4K</td><td>4K</td><td>~48K</td></tr>
+  <tr><td rowspan="3">集成 &amp; 调试</td><td>批量处理管线串联</td><td>3~5</td><td>5K</td><td>3K</td><td>~40K</td></tr>
+  <tr><td>Debug + 错误修复</td><td>5~8</td><td>6K</td><td>3K</td><td>~72K</td></tr>
+  <tr><td>参数调优 + 效果验证</td><td>3~5</td><td>5K</td><td>2K</td><td>~35K</td></tr>
+  <tr><td>测试</td><td>生成测试用例 + 修复</td><td>3~5</td><td>4K</td><td>3K</td><td>~35K</td></tr>
+  <tr><td>文档</td><td>README + 使用说明</td><td>2~3</td><td>3K</td><td>3K</td><td>~18K</td></tr>
+  <tr><td>优化</td><td>性能优化 + 边缘 case 处理</td><td>3~5</td><td>5K</td><td>3K</td><td>~40K</td></tr>
+  <tr><td colspan="4"><strong>总计（估算范围）</strong></td><td><strong>~350K ~ 480K Tokens</strong></td></tr>
+</tbody>
+</table>
+
+<h4>Token 费用折算（2026 年参考价格）</h4>
+<table>
+<thead><tr><th>模型</th><th>Input / 1K Tokens</th><th>Output / 1K Tokens</th><th>估算总费用（450K Tokens 计）</th></tr></thead>
+<tbody>
+  <tr><td>Claude Sonnet 4</td><td>$3.00</td><td>$15.00</td><td>~$15 ~ $25</td></tr>
+  <tr><td>GPT-4o</td><td>$2.50</td><td>$10.00</td><td>~$10 ~ $18</td></tr>
+  <tr><td>DeepSeek V4</td><td>$0.50</td><td>$2.00</td><td>~$2 ~ $5</td></tr>
+</tbody>
+</table>
+
+<div class="warn-box">
+  <strong>关于 AI Agent Token 预估的重要说明：</strong><br>
+  <ul style="margin:8px 0 0 16px;">
+    <li>实际 Token 消耗高度取决于 Agent 的"试错"次数——理想情况 350K，复杂场景可达 480K+</li>
+    <li>每个 Debug 回合一回合可能吃掉 10K~20K Input（需要上传报错日志 + 代码上下文）</li>
+    <li>建议设置 Token 预算上限并分段进行：先做核心链路验证 → 再补齐周边功能</li>
+    <li>使用 DeepSeek 等低成本模型做前期探索可大幅降低 Token 开销</li>
+  </ul>
+</div>
+
+<h3>6.3 两种方式对比总结</h3>
+<table>
+<thead><tr><th>维度</th><th>传统人工开发</th><th>AI Agent 辅助</th></tr></thead>
+<tbody>
+  <tr><td>时间投入</td><td>13~16 人天（日历时间 2~3 周）</td><td>数小时（实际编程）+ 人工审查时间（1~2 天）</td></tr>
+  <tr><td>人力成本</td><td>约 ¥20K ~ ¥30K（按日薪 ¥1.5K~¥2K 计）</td><td>约 ¥50 ~ ¥200（Token 费用）+ ¥2K ~ ¥4K（审查/调试）</td></tr>
+  <tr><td>Code 质量</td><td>稳定、可控、易于维护</td><td>需人工审查重构，初期可能有技术债务</td></tr>
+  <tr><td>最佳实践</td><td>适合核心算法、生产交付</td><td>适合快速原型、MVP 验证、重复代码生成</td></tr>
+</tbody>
+</table>
+
+<h3>6.4 推荐实施策略</h3>
+<div class="flow-box">
+  <p><strong>AI Agent 生成原型 + 人工审查 + 逐步硬化</strong></p>
+  <p>① Agent 生成 MVP 完整代码（~450K Tokens，数小时）</p>
+  <p>② 人工审查架构、安全、边界条件（~2 人天）</p>
+  <p>③ 人工补充单元测试、集成测试（~1 人天）</p>
+  <p>④ 参数调优 + 真实数据验证（~1 人天）</p>
+  <p><strong>总计实际投入：~4 人天审查 + ~$20 Token 费用</strong></p>
+</div>
+</div>
+
+<div class="section" id="risk">
+<h2>七、风险与里程碑</h2>
+
+<h3>7.1 风险识别</h3>
+<table>
+<thead><tr><th>风险</th><th>概率</th><th>影响</th><th>应对措施</th></tr></thead>
+<tbody>
+  <tr><td>人脸识别精度不足（侧脸/遮挡/光照差）</td><td>中</td><td>高</td><td>提供多角度参考照；增加置信度阈值可调；加入人工确认</td></tr>
+  <tr><td>磨皮效果过于平滑/塑料感</td><td>中</td><td>中</td><td>表面模糊参数可调；后期可叠加高频细节纹理保持真实感</td></tr>
+  <tr><td>批量处理速度太慢（CPU 模式）</td><td>低</td><td>中</td><td>多线程优化；优先使用轻量模型；GPU 加速作为 P2</td></tr>
+  <tr><td>非目标人脸误识别为目标</td><td>低</td><td>高</td><td>提高相似度阈值；输出中间结果供人工审核</td></tr>
+  <tr><td>同一人跨图片肤色不一致导致磨皮效果不统一</td><td>低</td><td>低</td><td>统一使用绝对参数而非相对参数</td></tr>
+</tbody>
+</table>
+
+<h3>7.2 里程碑规划</h3>
+<table>
+<thead><tr><th>里程碑</th><th>时间</th><th>交付物</th></tr></thead>
+<tbody>
+  <tr><td>M1: 需求确认</td><td>Day 1</td><td>需求文档定稿、技术方案确认</td></tr>
+  <tr><td>M2: 核心链路跑通</td><td>Day 2~3</td><td>人脸检测 + 识别 + 磨皮在单张图上跑通</td></tr>
+  <tr><td>M3: MVP 可用</td><td>Day 4~6</td><td>CLI 批量处理完整链路可用</td></tr>
+  <tr><td>M4: 质量加固</td><td>Day 7~9</td><td>测试覆盖、边缘 case 修复、参数调优</td></tr>
+  <tr><td>M5: 交付</td><td>Day 10</td><td>完整工具包 + 文档 + 测试报告</td></tr>
+</tbody>
+</table>
+
+<!-- Footer -->
+<div class="footer">
+  文档生成于 2026-06-06 · 基于 AI Agent 辅助策划与分析
+</div>
+
+</div>
+
+</body>
+</html>
