@@ -187,9 +187,7 @@ function PersonCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const avatarUrl = person.avatar_path
-    ? `/static/persons/${person.avatar_path.split('/').pop()}`
-    : null;
+  const avatarUrl = person.avatar_url || null;
 
   return (
     <Card className="group hover:shadow-md transition-all">

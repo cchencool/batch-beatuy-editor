@@ -20,6 +20,41 @@ from app.core.config import settings
 router = APIRouter()
 
 
+def _path_to_url(path: str) -> str:
+    """将绝对路径转换为静态文件URL（相对于PERSONS_DIR）"""
+    if not path:
+        return ""
+    # 提取相对于PERSONS_DIR的路径
+    if path.startswith(settings.PERSONS_DIR):
+        relative = os.path.relpath(path, settings.PERSONS_DIR)
+        return f"/static/persons/{relative}"
+    # 如果不在PERSONS_DIR下，尝试其他已知目录
+    for name, base_dir in [("uploads", settings.UPLOADS_DIR), ("outputs", settings.OUTPUTS_DIR)]:
+        if path.startswith(base_dir):
+            relative = os.path.relpath(path, base_dir)
+            return f"/static/{name}/{relative}"
+    # 最后只取文件名
+    return f"/static/persons/{os.path.basename(path)}"
+
+
+def _person_to_response(p: Person) -> PersonResponse:
+    """将数据库模型转换为响应对象"""
+    return PersonResponse(
+        id=p.id,
+        name=p.name,
+        note=p.note,
+        avatar_path=p.avatar_path,
+        avatar_url=_path_to_url(p.avatar_path) if p.avatar_path else None,
+        reference_photos=p.reference_photos or [],
+        photo_urls=[_path_to_url(ph) for ph in (p.reference_photos or [])],
+        is_active=p.is_active,
+        process_count=p.process_count,
+        last_process_time=p.last_process_time,
+        created_at=p.created_at,
+        updated_at=p.updated_at,
+    )
+
+
 @router.get("/", response_model=PersonListResponse)
 async def list_persons(
     skip: int = 0,
@@ -44,7 +79,9 @@ async def list_persons(
     total_result = await db.execute(count_query)
     total = total_result.scalar()
 
-    return PersonListResponse(persons=persons, total=total)
+    # 为每个人员计算URL字段
+    person_responses = [_person_to_response(p) for p in persons]
+    return PersonListResponse(persons=person_responses, total=total)
 
 
 @router.get("/{person_id}", response_model=PersonResponse)
@@ -56,7 +93,7 @@ async def get_person(person_id: int, db: AsyncSession = Depends(get_db)):
     if not person:
         raise HTTPException(status_code=404, detail="人员不存在")
 
-    return person
+    return _person_to_response(person)
 
 
 @router.post("/", response_model=PersonResponse)
@@ -108,7 +145,7 @@ async def create_person(
     await db.commit()
     await db.refresh(person)
 
-    return person
+    return _person_to_response(person)
 
 
 @router.put("/{person_id}", response_model=PersonResponse)
@@ -133,7 +170,7 @@ async def update_person(
     await db.commit()
     await db.refresh(person)
 
-    return person
+    return _person_to_response(person)
 
 
 @router.delete("/{person_id}", response_model=MessageResponse)
@@ -193,7 +230,7 @@ async def add_photos(
     await db.commit()
     await db.refresh(person)
 
-    return person
+    return _person_to_response(person)
 
 
 @router.delete("/{person_id}/photos/{photo_index}", response_model=PersonResponse)
@@ -232,4 +269,4 @@ async def delete_photo(
     await db.commit()
     await db.refresh(person)
 
-    return person
+    return _person_to_response(person)

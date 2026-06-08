@@ -27,7 +27,9 @@ class PersonResponse(BaseModel):
     name: str
     note: Optional[str]
     avatar_path: Optional[str]
+    avatar_url: Optional[str] = None
     reference_photos: List[str]
+    photo_urls: List[str] = []
     is_active: bool
     process_count: int
     last_process_time: Optional[datetime]

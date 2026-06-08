@@ -192,9 +192,9 @@ export function BatchProcess() {
                         }`}
                       >
                         <div className="w-6 h-6 rounded-full bg-muted overflow-hidden">
-                          {person.avatar_path ? (
+                          {person.avatar_url ? (
                             <img
-                              src={`/static/persons/${person.avatar_path.split('/').pop()}`}
+                              src={person.avatar_url}
                               alt={person.name}
                               className="w-full h-full object-cover"
                             />

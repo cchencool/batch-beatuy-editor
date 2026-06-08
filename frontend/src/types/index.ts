@@ -4,7 +4,9 @@ export interface Person {
   name: string;
   note?: string;
   avatar_path?: string;
+  avatar_url?: string;
   reference_photos: string[];
+  photo_urls?: string[];
   is_active: boolean;
   process_count: number;
   last_process_time?: string;
