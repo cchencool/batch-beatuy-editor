@@ -260,7 +260,7 @@ async def download_results(task_id: int, db: AsyncSession = Depends(get_db)):
 
 async def process_task_background(task_id: int):
     """后台处理任务"""
-    from sqlalchemy.ext.asyncio import async_session
+    from app.models.database import async_session
 
     # 初始化处理控制
     processing_tasks[task_id] = {"pause": False, "cancel": False}
