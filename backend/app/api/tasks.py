@@ -27,6 +27,74 @@ router = APIRouter()
 processing_tasks = {}
 
 
+def _path_to_url(path: str) -> str:
+    """将绝对路径转换为静态文件URL"""
+    if not path:
+        return ""
+    for name, base_dir in [
+        ("persons", settings.PERSONS_DIR),
+        ("uploads", settings.UPLOADS_DIR),
+        ("outputs", settings.OUTPUTS_DIR),
+    ]:
+        if path.startswith(base_dir):
+            relative = os.path.relpath(path, base_dir)
+            return f"/static/{name}/{relative}"
+    return f"/static/uploads/{os.path.basename(path)}"
+
+
+def _result_to_image_result(r: dict) -> ImageResult:
+    """将数据库中的结果字典转换为ImageResult对象"""
+    return ImageResult(
+        file_id=r.get("file_id", ""),
+        filename=r.get("filename", ""),
+        status=r.get("status", "failed"),
+        faces_detected=r.get("faces_detected", 0),
+        targets_matched=r.get("targets_matched", 0),
+        output_path=r.get("output_path"),
+        output_url=_path_to_url(r["output_path"]) if r.get("output_path") else None,
+        thumbnail_path=r.get("thumbnail_path"),
+        thumbnail_url=_path_to_url(r["thumbnail_path"]) if r.get("thumbnail_path") else None,
+        process_time_ms=r.get("process_time_ms", 0),
+        error_message=r.get("error_message"),
+    )
+
+
+def _task_to_response(task: Task) -> TaskResponse:
+    """将Task模型转换为TaskResponse"""
+    results = []
+    if task.results:
+        if isinstance(task.results, str):
+            try:
+                task.results = json.loads(task.results)
+            except Exception:
+                task.results = []
+        for r in task.results:
+            if isinstance(r, dict):
+                results.append(_result_to_image_result(r))
+            else:
+                results.append(r)
+
+    return TaskResponse(
+        id=task.id,
+        name=task.name,
+        status=task.status,
+        target_person_ids=task.target_person_ids or [],
+        beautify_strength=task.beautify_strength,
+        edge_protection=task.edge_protection,
+        detail_preserve=task.detail_preserve,
+        total_count=task.total_count,
+        processed_count=task.processed_count,
+        success_count=task.success_count,
+        failed_count=task.failed_count,
+        no_target_count=task.no_target_count,
+        results=results,
+        started_at=task.started_at,
+        completed_at=task.completed_at,
+        created_at=task.created_at,
+        error_message=task.error_message,
+    )
+
+
 @router.get("/", response_model=TaskListResponse)
 async def list_tasks(
     skip: int = 0,
@@ -51,7 +119,7 @@ async def list_tasks(
     total_result = await db.execute(count_query)
     total = total_result.scalar()
 
-    return TaskListResponse(tasks=tasks, total=total)
+    return TaskListResponse(tasks=[_task_to_response(t) for t in tasks], total=total)
 
 
 @router.get("/{task_id}", response_model=TaskResponse)
@@ -63,7 +131,7 @@ async def get_task(task_id: int, db: AsyncSession = Depends(get_db)):
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
 
-    return task
+    return _task_to_response(task)
 
 
 @router.get("/{task_id}/progress", response_model=TaskProgress)
@@ -144,7 +212,7 @@ async def create_task(
     # 在后台启动处理
     background_tasks.add_task(process_task_background, task.id)
 
-    return task
+    return _task_to_response(task)
 
 
 @router.post("/{task_id}/start", response_model=MessageResponse)

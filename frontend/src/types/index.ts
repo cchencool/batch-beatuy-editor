@@ -19,9 +19,11 @@ export interface FileInfo {
   id: string;
   filename: string;
   original_path: string;
+  original_url?: string;
   size: number;
   extension: string;
   thumbnail_path?: string;
+  thumbnail_url?: string;
 }
 
 // 任务状态
@@ -42,7 +44,9 @@ export interface ImageResult {
   faces_detected: number;
   targets_matched: number;
   output_path?: string;
+  output_url?: string;
   thumbnail_path?: string;
+  thumbnail_url?: string;
   process_time_ms: number;
   error_message?: string;
 }

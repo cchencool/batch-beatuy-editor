@@ -116,7 +116,7 @@ export function Review() {
         <div className="lg:col-span-3">
           <Card>
             <CardContent className="p-4">
-              {currentResult.status === 'success' && currentResult.output_path ? (
+              {currentResult.status === 'success' && currentResult.output_url ? (
                 <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
                   {/* Original Image */}
                   <img
@@ -128,7 +128,7 @@ export function Review() {
 
                   {/* Processed Image */}
                   <img
-                    src={`/static/outputs/${task.id}/${currentResult.output_path.split('/').pop()}`}
+                    src={currentResult.output_url}
                     alt="Processed"
                     className="absolute inset-0 w-full h-full object-contain"
                     style={{ clipPath: showSlider ? `inset(0 0 0 ${sliderPosition}%)` : undefined }}
@@ -314,14 +314,18 @@ function ThumbnailItem({
       onClick={onClick}
     >
       <div className="w-full h-full bg-muted flex items-center justify-center">
-        <img
-          src={result.thumbnail_path || ''}
-          alt={result.filename}
-          className="w-full h-full object-cover"
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = 'none';
-          }}
-        />
+        {result.thumbnail_url ? (
+          <img
+            src={result.thumbnail_url}
+            alt={result.filename}
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = 'none';
+            }}
+          />
+        ) : (
+          <div className="text-muted-foreground text-xs">暂无预览</div>
+        )}
       </div>
       {result.status === 'success' && (
         <div className="absolute bottom-1 right-1 p-0.5 rounded-full bg-green-500 text-white">

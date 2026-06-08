@@ -53,9 +53,11 @@ class FileInfo(BaseModel):
     id: str  # 文件唯一标识
     filename: str
     original_path: str
+    original_url: Optional[str] = None
     size: int
     extension: str
     thumbnail_path: Optional[str] = None
+    thumbnail_url: Optional[str] = None
 
 
 class FileUploadResponse(BaseModel):
@@ -98,7 +100,9 @@ class ImageResult(BaseModel):
     faces_detected: int = 0
     targets_matched: int = 0
     output_path: Optional[str] = None
+    output_url: Optional[str] = None
     thumbnail_path: Optional[str] = None
+    thumbnail_url: Optional[str] = None
     process_time_ms: int = 0
     error_message: Optional[str] = None
 

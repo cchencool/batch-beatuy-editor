@@ -352,9 +352,7 @@ export function BatchProcess() {
 }
 
 function FileThumbnail({ file, onRemove }: { file: FileInfo; onRemove: () => void }) {
-  const thumbnailUrl = file.thumbnail_path
-    ? `/static/uploads/thumbnails/${file.thumbnail_path.split('/').pop()}`
-    : `/static/uploads/${file.id}${file.extension}`;
+  const thumbnailUrl = file.thumbnail_url || file.original_url || `/static/uploads/${file.id}${file.extension}`;
 
   return (
     <div className="relative aspect-square rounded-lg overflow-hidden group bg-muted">

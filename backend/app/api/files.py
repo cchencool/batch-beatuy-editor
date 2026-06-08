@@ -17,6 +17,35 @@ router = APIRouter()
 uploaded_files = {}
 
 
+def _path_to_url(path: str) -> str:
+    """将绝对路径转换为静态文件URL"""
+    if not path:
+        return ""
+    for name, base_dir in [
+        ("persons", settings.PERSONS_DIR),
+        ("uploads", settings.UPLOADS_DIR),
+        ("outputs", settings.OUTPUTS_DIR),
+    ]:
+        if path.startswith(base_dir):
+            relative = os.path.relpath(path, base_dir)
+            return f"/static/{name}/{relative}"
+    return f"/static/uploads/{os.path.basename(path)}"
+
+
+def _file_to_response(file_info: FileInfo) -> FileInfo:
+    """为文件信息计算URL字段"""
+    return FileInfo(
+        id=file_info.id,
+        filename=file_info.filename,
+        original_path=file_info.original_path,
+        original_url=_path_to_url(file_info.original_path),
+        size=file_info.size,
+        extension=file_info.extension,
+        thumbnail_path=file_info.thumbnail_path,
+        thumbnail_url=_path_to_url(file_info.thumbnail_path) if file_info.thumbnail_path else None,
+    )
+
+
 @router.post("/upload", response_model=FileUploadResponse)
 async def upload_files(files: List[UploadFile] = File(...)):
     """上传文件"""
@@ -61,9 +90,10 @@ async def upload_files(files: List[UploadFile] = File(...)):
             extension=ext,
             thumbnail_path=thumb_path
         )
+        file_info_with_url = _file_to_response(file_info)
 
         uploaded_files[file_id] = file_info
-        uploaded.append(file_info)
+        uploaded.append(file_info_with_url)
 
     return FileUploadResponse(files=uploaded, total=len(uploaded))
 
@@ -78,7 +108,7 @@ async def upload_folder(files: List[UploadFile] = File(...)):
 @router.get("/list", response_model=FileUploadResponse)
 async def list_files():
     """获取已上传文件列表"""
-    files = list(uploaded_files.values())
+    files = [_file_to_response(f) for f in uploaded_files.values()]
     return FileUploadResponse(files=files, total=len(files))
 
 
@@ -87,7 +117,7 @@ async def get_file(file_id: str):
     """获取文件信息"""
     if file_id not in uploaded_files:
         raise HTTPException(status_code=404, detail="文件不存在")
-    return uploaded_files[file_id]
+    return _file_to_response(uploaded_files[file_id])
 
 
 @router.delete("/{file_id}", response_model=MessageResponse)
