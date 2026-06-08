@@ -24,10 +24,10 @@ wheels/
 *.egg
 
 # 数据目录
-data/persons/
-data/uploads/
-data/outputs/
-data/*.db
+backend/data/persons/
+backend/data/uploads/
+backend/data/outputs/
+backend/data/*.db
 
 # IDE
 .vscode/
