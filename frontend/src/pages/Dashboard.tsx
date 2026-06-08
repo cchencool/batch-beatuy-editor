@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Image, Clock, PlayCircle, Plus, Upload } from 'lucide-react';
+import { Users, Image, Clock, PlayCircle, Plus, Upload, Play } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { useAppStore } from '../stores/useAppStore';
@@ -133,7 +133,14 @@ export function Dashboard() {
       {/* Recent Tasks */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">最近任务</CardTitle>
+          <CardTitle className="text-lg flex items-center justify-between">
+            最近任务
+            {recentTasks.length > 0 && (
+              <Button variant="outline" size="sm" onClick={() => navigate('/report')}>
+                查看全部
+              </Button>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {recentTasks.length === 0 ? (
@@ -197,6 +204,9 @@ export function Dashboard() {
 }
 
 function TaskRow({ task, onClick }: { task: Task; onClick: () => void }) {
+  const [starting, setStarting] = useState(false);
+  const { addToast, setTasks, tasks: allTasks } = useAppStore();
+
   const statusColors = {
     pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
     processing: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
@@ -213,25 +223,54 @@ function TaskRow({ task, onClick }: { task: Task; onClick: () => void }) {
     cancelled: '已取消',
   };
 
+  const handleStart = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      setStarting(true);
+      await tasksApi.start(task.id);
+      addToast('任务已开始处理', 'success');
+      // 刷新任务列表
+      const res = await tasksApi.list();
+      setTasks(res.tasks);
+    } catch (error) {
+      addToast('启动任务失败', 'error');
+    } finally {
+      setStarting(false);
+    }
+  };
+
   return (
     <div
       className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
       onClick={onClick}
     >
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
           <Image className="w-5 h-5 text-muted-foreground" />
         </div>
-        <div>
-          <p className="font-medium">{task.name}</p>
+        <div className="min-w-0">
+          <p className="font-medium truncate">{task.name}</p>
           <p className="text-sm text-muted-foreground">
             {new Date(task.created_at).toLocaleString()} · {task.total_count} 张图片
           </p>
         </div>
       </div>
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[task.status]}`}>
-        {statusLabels[task.status]}
-      </span>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        {task.status === 'pending' && (
+          <Button
+            size="sm"
+            onClick={handleStart}
+            loading={starting}
+            className="gap-1"
+          >
+            <Play className="w-3 h-3" />
+            开始处理
+          </Button>
+        )}
+        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[task.status]}`}>
+          {statusLabels[task.status]}
+        </span>
+      </div>
     </div>
   );
 }
