@@ -328,24 +328,27 @@ async def download_results(task_id: int, db: AsyncSession = Depends(get_db)):
 
 async def process_task_background(task_id: int):
     """后台处理任务"""
+    import logging
+    logger = logging.getLogger(__name__)
     from app.models.database import async_session
 
     # 初始化处理控制
     processing_tasks[task_id] = {"pause": False, "cancel": False}
 
-    async with async_session() as db:
-        result = await db.execute(select(Task).where(Task.id == task_id))
-        task = result.scalar_one_or_none()
+    try:
+        async with async_session() as db:
+            result = await db.execute(select(Task).where(Task.id == task_id))
+            task = result.scalar_one_or_none()
 
-        if not task:
-            return
+            if not task:
+                logger.error(f"Task {task_id} not found")
+                return
 
-        # 更新状态为处理中
-        task.status = "processing"
-        task.started_at = datetime.utcnow()
-        await db.commit()
+            # 更新状态为处理中
+            task.status = "processing"
+            task.started_at = datetime.utcnow()
+            await db.commit()
 
-        try:
             # 获取目标人员信息
             persons_result = await db.execute(
                 select(Person).where(Person.id.in_(task.target_person_ids))
@@ -394,6 +397,7 @@ async def process_task_background(task_id: int):
                         task.failed_count += 1
 
                 except Exception as e:
+                    logger.error(f"Failed to process {file_info['filename']}: {e}")
                     results.append({
                         "file_id": file_info["id"],
                         "filename": file_info["filename"],
@@ -427,12 +431,20 @@ async def process_task_background(task_id: int):
                 json.dump(report, f, ensure_ascii=False, indent=2)
 
             await db.commit()
+            logger.info(f"Task {task_id} completed successfully")
 
-        except Exception as e:
-            task.status = "failed"
-            task.error_message = str(e)
-            await db.commit()
-
-        finally:
-            if task_id in processing_tasks:
-                del processing_tasks[task_id]
+    except Exception as e:
+        logger.error(f"Task {task_id} failed: {e}")
+        try:
+            async with async_session() as db:
+                result = await db.execute(select(Task).where(Task.id == task_id))
+                task = result.scalar_one_or_none()
+                if task:
+                    task.status = "failed"
+                    task.error_message = str(e)
+                    await db.commit()
+        except Exception:
+            pass
+    finally:
+        if task_id in processing_tasks:
+            del processing_tasks[task_id]
