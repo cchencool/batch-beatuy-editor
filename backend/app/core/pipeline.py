@@ -166,10 +166,11 @@ class BeautyPipeline:
 
             result["targets_matched"] = len(target_faces)
 
-            # 记录最小匹配距离
+            # 记录最小匹配距离和人脸位置
             if target_faces:
                 min_distance = min(f.get("match_distance", float('inf')) for f in target_faces)
                 result["match_distance"] = round(float(min_distance), 4)
+                result["face_bboxes"] = [f['bbox'] for f in target_faces]
 
             if len(target_faces) == 0:
                 # 未匹配到目标人员

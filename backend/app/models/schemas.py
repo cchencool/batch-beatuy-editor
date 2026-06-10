@@ -103,6 +103,7 @@ class ImageResult(BaseModel):
     faces_detected: int = 0
     targets_matched: int = 0
     match_distance: Optional[float] = None
+    face_bboxes: Optional[List[List[int]]] = None
     output_path: Optional[str] = None
     output_url: Optional[str] = None
     thumbnail_path: Optional[str] = None

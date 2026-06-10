@@ -51,6 +51,7 @@ def _result_to_image_result(r: dict) -> ImageResult:
         faces_detected=r.get("faces_detected", 0),
         targets_matched=r.get("targets_matched", 0),
         match_distance=r.get("match_distance"),
+        face_bboxes=r.get("face_bboxes"),
         output_path=r.get("output_path"),
         output_url=_path_to_url(r["output_path"]) if r.get("output_path") else None,
         thumbnail_path=r.get("thumbnail_path"),

@@ -44,6 +44,7 @@ export interface ImageResult {
   faces_detected: number;
   targets_matched: number;
   match_distance?: number;
+  face_bboxes?: number[][];
   output_path?: string;
   output_url?: string;
   thumbnail_path?: string;
