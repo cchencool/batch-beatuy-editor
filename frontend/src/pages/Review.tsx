@@ -23,6 +23,7 @@ export function Review() {
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const lastMouse = useRef({ x: 0, y: 0 });
+  const spacePressed = useRef(false);
 
   useEffect(() => {
     if (taskId) {
@@ -32,7 +33,6 @@ export function Review() {
     }
   }, [taskId]);
 
-  // 切换图片时重置缩放
   useEffect(() => {
     setScale(1);
     setTranslateX(0);
@@ -67,8 +67,13 @@ export function Review() {
     }
   };
 
+  // 空格键监听
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !e.repeat) {
+        e.preventDefault();
+        spacePressed.current = true;
+      }
       if (!task) return;
       switch (e.key) {
         case 'ArrowLeft':
@@ -86,11 +91,22 @@ export function Review() {
           break;
       }
     };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        spacePressed.current = false;
+        isDragging.current = false;
+      }
+    };
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
   }, [task]);
 
-  // 监听全屏状态变化
   useEffect(() => {
     const handler = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', handler);
@@ -105,7 +121,9 @@ export function Review() {
     }
   };
 
+  // 对比条移动（仅在未按空格时）
   const handleSliderMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (spacePressed.current) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const percentage = (x / rect.width) * 100;
@@ -116,33 +134,31 @@ export function Review() {
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setScale(prev => {
-      const newScale = Math.max(0.5, Math.min(5, prev * delta));
-      return newScale;
-    });
+    setScale(prev => Math.max(0.5, Math.min(5, prev * delta)));
   }, []);
 
-  // 鼠标拖拽平移
+  // 鼠标按下：空格+拖拽=平移，否则=对比条
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (scale <= 1) return;
-    isDragging.current = true;
-    lastMouse.current = { x: e.clientX, y: e.clientY };
+    if (spacePressed.current && scale > 1) {
+      isDragging.current = true;
+      lastMouse.current = { x: e.clientX, y: e.clientY };
+    }
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging.current) return;
-    const dx = e.clientX - lastMouse.current.x;
-    const dy = e.clientY - lastMouse.current.y;
-    lastMouse.current = { x: e.clientX, y: e.clientY };
-    setTranslateX(prev => prev + dx);
-    setTranslateY(prev => prev + dy);
+    if (isDragging.current) {
+      const dx = e.clientX - lastMouse.current.x;
+      const dy = e.clientY - lastMouse.current.y;
+      lastMouse.current = { x: e.clientX, y: e.clientY };
+      setTranslateX(prev => prev + dx);
+      setTranslateY(prev => prev + dy);
+    }
   };
 
   const handleMouseUp = () => {
     isDragging.current = false;
   };
 
-  // 重置缩放
   const resetZoom = () => {
     setScale(1);
     setTranslateX(0);
@@ -151,11 +167,10 @@ export function Review() {
 
   // 聚焦人脸
   const focusOnFace = () => {
-    if (!task) return;
+    if (!task || !containerRef.current) return;
     const result = task.results[currentIndex];
     if (!result.face_bboxes || result.face_bboxes.length === 0) return;
 
-    // 计算所有人脸的边界框
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const bbox of result.face_bboxes) {
       const [x, y, w, h] = bbox;
@@ -165,17 +180,13 @@ export function Review() {
       maxY = Math.max(maxY, y + h);
     }
 
-    // 添加边距
-    const padding = 50;
+    const padding = 100;
     minX = Math.max(0, minX - padding);
     minY = Math.max(0, minY - padding);
 
-    // 计算缩放比例（假设图片是6000x4000）
     const imgWidth = 6000;
     const imgHeight = 4000;
     const container = containerRef.current;
-    if (!container) return;
-
     const containerWidth = container.clientWidth;
     const containerHeight = container.clientHeight;
 
@@ -186,7 +197,6 @@ export function Review() {
     const scaleY = containerHeight / (faceHeight / imgHeight * containerHeight);
     const newScale = Math.min(scaleX, scaleY, 3);
 
-    // 计算平移量（让人脸居中）
     const faceCenterX = (minX + maxX) / 2 / imgWidth * containerWidth;
     const faceCenterY = (minY + maxY) / 2 / imgHeight * containerHeight;
 
@@ -219,27 +229,24 @@ export function Review() {
   return (
     <div className={`${isFullscreen ? 'fixed inset-0 z-50 bg-background flex flex-col' : 'animate-fade-in'}`}>
       {/* Header */}
-      <div className={`flex items-center justify-between ${isFullscreen ? 'p-4 border-b' : 'mb-6'}`}>
+      <div className={`flex items-center justify-between ${isFullscreen ? 'p-4 border-b' : 'mb-4'}`}>
         <div>
           <h1 className="text-2xl font-bold">预览审阅</h1>
           <p className="text-muted-foreground">{currentIndex + 1} / {task.results.length}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           {scale > 1 && (
             <Button variant="outline" size="sm" onClick={resetZoom}>
-              <RotateCcw className="w-4 h-4 mr-1" />
-              重置缩放
+              <RotateCcw className="w-4 h-4 mr-1" />重置
             </Button>
           )}
           {currentResult.face_bboxes && currentResult.face_bboxes.length > 0 && (
             <Button variant="outline" size="sm" onClick={focusOnFace}>
-              <Focus className="w-4 h-4 mr-1" />
-              聚焦人脸
+              <Focus className="w-4 h-4 mr-1" />聚焦人脸
             </Button>
           )}
           <Button variant="outline" onClick={toggleFullscreen}>
-            <Maximize2 className="w-4 h-4 mr-2" />
-            {isFullscreen ? '退出全屏' : '全屏'}
+            <Maximize2 className="w-4 h-4 mr-2" />{isFullscreen ? '退出全屏' : '全屏'}
           </Button>
           {!isFullscreen && (
             <Button onClick={() => navigate(`/report/${task.id}`)}>查看报告</Button>
@@ -250,85 +257,98 @@ export function Review() {
       <div className={`flex gap-4 flex-1 min-h-0 ${isFullscreen ? 'px-4 pb-4' : ''}`}>
         {/* Main Preview */}
         <div className="flex-1 flex flex-col min-w-0">
-          <Card className="flex-1 flex flex-col min-h-0">
-            <CardContent className="p-4 flex-1 flex flex-col min-h-0">
+          <Card className="flex-1 flex flex-col">
+            <CardContent className="p-4 flex-1 flex flex-col">
               {currentResult.output_url ? (
-                <div
-                  ref={containerRef}
-                  className={`relative bg-black rounded-lg overflow-hidden flex-1 min-h-0 ${scale > 1 ? 'cursor-grab' : 'cursor-default'}`}
-                  onWheel={handleWheel}
-                  onMouseDown={handleMouseDown}
-                  onMouseMove={handleMouseMove}
-                  onMouseUp={handleMouseUp}
-                  onMouseLeave={handleMouseUp}
-                >
+                <div className="relative flex-1 min-h-[400px]">
+                  {/* 图片容器 - 占满可用空间 */}
                   <div
-                    className="absolute inset-0"
-                    style={{
-                      transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
-                      transformOrigin: 'center center',
-                      transition: isDragging.current ? 'none' : 'transform 0.1s ease-out',
-                    }}
+                    ref={containerRef}
+                    className={`absolute inset-0 bg-black rounded-lg overflow-hidden ${scale > 1 ? (spacePressed.current ? 'cursor-grab' : 'cursor-crosshair') : 'cursor-default'}`}
+                    onWheel={handleWheel}
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseUp}
                   >
-                    {currentResult.status === 'success' ? (
-                      <>
-                        <img
-                          src={filesApi.getImageUrl(originalPath)}
-                          alt="Original"
-                          className="absolute inset-0 w-full h-full object-contain"
-                          style={{ clipPath: showSlider ? `inset(0 ${100 - sliderPosition}% 0 0)` : undefined }}
-                        />
-                        <img
-                          src={filesApi.getImageUrl(currentResult.output_path || '')}
-                          alt="Processed"
-                          className="absolute inset-0 w-full h-full object-contain"
-                          style={{ clipPath: showSlider ? `inset(0 0 0 ${sliderPosition}%)` : undefined }}
-                        />
-                        {showSlider && (
-                          <div
-                            className="absolute inset-0 cursor-col-resize"
-                            onClick={handleSliderMove}
-                            onMouseMove={(e) => e.buttons === 1 && handleSliderMove(e)}
-                          >
-                            <div
-                              className="absolute top-0 bottom-0 w-0.5 bg-white shadow-lg"
-                              style={{ left: `${sliderPosition}%` }}
-                            >
-                              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white shadow-lg flex items-center justify-center">
-                                <div className="flex gap-0.5">
-                                  <ChevronLeft className="w-3 h-3" />
-                                  <ChevronRight className="w-3 h-3" />
-                                </div>
-                              </div>
-                            </div>
-                            <div className="absolute top-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm">原图</div>
-                            <div className="absolute top-4 right-4 px-2 py-1 rounded bg-black/60 text-white text-sm">处理后</div>
+                    {/* 缩放层 - 只放大图片 */}
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
+                        transformOrigin: 'center center',
+                        transition: isDragging.current ? 'none' : 'transform 0.15s ease-out',
+                      }}
+                    >
+                      {currentResult.status === 'success' ? (
+                        <>
+                          <img
+                            src={filesApi.getImageUrl(originalPath)}
+                            alt="Original"
+                            className="absolute inset-0 w-full h-full object-contain"
+                            style={{ clipPath: showSlider ? `inset(0 ${100 - sliderPosition}% 0 0)` : undefined }}
+                          />
+                          <img
+                            src={filesApi.getImageUrl(currentResult.output_path || '')}
+                            alt="Processed"
+                            className="absolute inset-0 w-full h-full object-contain"
+                            style={{ clipPath: showSlider ? `inset(0 0 0 ${sliderPosition}%)` : undefined }}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <img
+                            src={filesApi.getImageUrl(currentResult.output_path || '')}
+                            alt={currentResult.filename}
+                            className="w-full h-full object-contain"
+                          />
+                          <div className="absolute top-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm">
+                            {currentResult.status === 'no_target' ? '未匹配到目标' : '处理失败'}
                           </div>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <img
-                          src={filesApi.getImageUrl(currentResult.output_path || '')}
-                          alt={currentResult.filename}
-                          className="w-full h-full object-contain"
-                        />
-                        <div className="absolute top-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm">
-                          {currentResult.status === 'no_target' ? '未匹配到目标' : '处理失败'}
+                        </>
+                      )}
+                    </div>
+
+                    {/* 对比条 - 不跟随缩放 */}
+                    {showSlider && currentResult.status === 'success' && (
+                      <div
+                        className="absolute inset-0 cursor-col-resize z-10"
+                        onClick={handleSliderMove}
+                        onMouseMove={(e) => e.buttons === 1 && handleSliderMove(e)}
+                      >
+                        <div
+                          className="absolute top-0 bottom-0 w-0.5 bg-white shadow-lg pointer-events-none"
+                          style={{ left: `${sliderPosition}%` }}
+                        >
+                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center pointer-events-none">
+                            <div className="flex gap-0.5">
+                              <ChevronLeft className="w-4 h-4" />
+                              <ChevronRight className="w-4 h-4" />
+                            </div>
+                          </div>
                         </div>
-                      </>
+                        <div className="absolute top-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none">原图</div>
+                        <div className="absolute top-4 right-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none">处理后</div>
+                      </div>
+                    )}
+
+                    {/* 缩放指示器 */}
+                    {scale > 1 && (
+                      <div className="absolute bottom-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm z-20">
+                        {Math.round(scale * 100)}%
+                      </div>
+                    )}
+
+                    {/* 操作提示 */}
+                    {scale > 1 && (
+                      <div className="absolute bottom-4 right-4 px-2 py-1 rounded bg-black/60 text-white text-xs z-20">
+                        按住空格拖拽平移
+                      </div>
                     )}
                   </div>
-
-                  {/* 缩放指示器 */}
-                  {scale > 1 && (
-                    <div className="absolute bottom-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm">
-                      {Math.round(scale * 100)}%
-                    </div>
-                  )}
                 </div>
               ) : (
-                <div className="aspect-video bg-muted rounded-lg flex items-center justify-center">
+                <div className="flex-1 min-h-[400px] bg-muted rounded-lg flex items-center justify-center">
                   <div className="text-center">
                     <AlertTriangle className="w-12 h-12 mx-auto mb-2 text-muted-foreground" />
                     <p className="text-muted-foreground">{currentResult.error_message || '无法加载图片'}</p>
@@ -341,7 +361,7 @@ export function Review() {
                 <Button variant="outline" onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))} disabled={currentIndex === 0}>
                   <ChevronLeft className="w-4 h-4 mr-1" />上一张
                 </Button>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
                   <Button variant={showSlider ? 'primary' : 'outline'} size="sm" onClick={() => setShowSlider(!showSlider)}>
                     对比模式
                   </Button>
@@ -351,6 +371,7 @@ export function Review() {
                   <Button variant="outline" size="sm" onClick={() => setScale(prev => Math.max(0.5, prev * 0.8))}>
                     <ZoomOut className="w-4 h-4" />
                   </Button>
+                  <span className="text-xs text-muted-foreground ml-2">滚轮缩放 · 空格+拖拽平移</span>
                 </div>
                 <Button variant="outline" onClick={() => setCurrentIndex(prev => Math.min(task.results.length - 1, prev + 1))} disabled={currentIndex === task.results.length - 1}>
                   下一张<ChevronRight className="w-4 h-4 ml-1" />
@@ -376,11 +397,11 @@ export function Review() {
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">检测到人脸</p>
-                    <p className="font-medium">{currentResult.faces_detected}</p>
+                    <p className="font-medium" title="图片中检测到的所有人脸数量（包括背景中的）">{currentResult.faces_detected}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">处理耗时</p>
-                    <p className="font-medium">{currentResult.process_time_ms}ms</p>
+                    <p className="text-sm text-muted-foreground">匹配目标</p>
+                    <p className="font-medium" title="与注册人员匹配的人脸数量">{currentResult.targets_matched}</p>
                   </div>
                 </div>
               </CardContent>
@@ -405,15 +426,14 @@ export function Review() {
 
       {/* Keyboard Shortcuts */}
       {!isFullscreen && (
-        <Card className="mt-6">
-          <CardContent className="p-4">
-            <h3 className="font-medium mb-2">快捷键</h3>
-            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-              <span><kbd className="px-2 py-1 bg-muted rounded">←</kbd> 上一张</span>
-              <span><kbd className="px-2 py-1 bg-muted rounded">→</kbd> 下一张</span>
-              <span><kbd className="px-2 py-1 bg-muted rounded">F</kbd> 全屏</span>
-              <span><kbd className="px-2 py-1 bg-muted rounded">滚轮</kbd> 缩放</span>
-              <span><kbd className="px-2 py-1 bg-muted rounded">0</kbd> 重置缩放</span>
+        <Card className="mt-4">
+          <CardContent className="p-3">
+            <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+              <span><kbd className="px-1.5 py-0.5 bg-muted rounded">←</kbd><kbd className="px-1.5 py-0.5 bg-muted rounded">→</kbd> 切换</span>
+              <span><kbd className="px-1.5 py-0.5 bg-muted rounded">F</kbd> 全屏</span>
+              <span><kbd className="px-1.5 py-0.5 bg-muted rounded">滚轮</kbd> 缩放</span>
+              <span><kbd className="px-1.5 py-0.5 bg-muted rounded">0</kbd> 重置</span>
+              <span><kbd className="px-1.5 py-0.5 bg-muted rounded">空格</kbd>+拖拽 平移</span>
             </div>
           </CardContent>
         </Card>
