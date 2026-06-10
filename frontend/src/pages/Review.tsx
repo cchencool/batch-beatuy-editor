@@ -260,7 +260,7 @@ export function Review() {
           <Card className="flex-1 flex flex-col">
             <CardContent className="p-4 flex-1 flex flex-col">
               {currentResult.output_url ? (
-                <div className="relative flex-1 min-h-[400px]">
+                <div className="relative flex-1 min-h-[50vh]">
                   {/* 图片容器 - 占满可用空间 */}
                   <div
                     ref={containerRef}
@@ -271,7 +271,7 @@ export function Review() {
                     onMouseUp={handleMouseUp}
                     onMouseLeave={handleMouseUp}
                   >
-                    {/* 缩放层 - 只放大图片 */}
+                    {/* 缩放层 - 包含图片和对比条 */}
                     <div
                       className="absolute inset-0"
                       style={{
@@ -307,30 +307,31 @@ export function Review() {
                           </div>
                         </>
                       )}
-                    </div>
 
-                    {/* 对比条 - 不跟随缩放 */}
-                    {showSlider && currentResult.status === 'success' && (
-                      <div
-                        className="absolute inset-0 cursor-col-resize z-10"
-                        onClick={handleSliderMove}
-                        onMouseMove={(e) => e.buttons === 1 && handleSliderMove(e)}
-                      >
+                      {/* 对比条 - 在缩放层内，反向缩放保持大小 */}
+                      {showSlider && currentResult.status === 'success' && (
                         <div
-                          className="absolute top-0 bottom-0 w-0.5 bg-white shadow-lg pointer-events-none"
-                          style={{ left: `${sliderPosition}%` }}
+                          className="absolute inset-0 cursor-col-resize z-10"
+                          onClick={handleSliderMove}
+                          onMouseMove={(e) => e.buttons === 1 && handleSliderMove(e)}
+                          style={{ transform: `scale(${1 / scale})`, transformOrigin: `${sliderPosition}% 50%` }}
                         >
-                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center pointer-events-none">
-                            <div className="flex gap-0.5">
-                              <ChevronLeft className="w-4 h-4" />
-                              <ChevronRight className="w-4 h-4" />
+                          <div
+                            className="absolute top-0 bottom-0 w-0.5 bg-white shadow-lg pointer-events-none"
+                            style={{ left: `${sliderPosition}%` }}
+                          >
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center pointer-events-none">
+                              <div className="flex gap-0.5">
+                                <ChevronLeft className="w-4 h-4" />
+                                <ChevronRight className="w-4 h-4" />
+                              </div>
                             </div>
                           </div>
+                          <div className="absolute top-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none">原图</div>
+                          <div className="absolute top-4 right-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none">处理后</div>
                         </div>
-                        <div className="absolute top-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none">原图</div>
-                        <div className="absolute top-4 right-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none">处理后</div>
-                      </div>
-                    )}
+                      )}
+                    </div>
 
                     {/* 缩放指示器 */}
                     {scale > 1 && (
