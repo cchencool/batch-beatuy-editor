@@ -10,6 +10,7 @@ import {
   Monitor,
   Menu,
   X,
+  Settings,
 } from 'lucide-react';
 import { useAppStore } from '../stores/useAppStore';
 import { useEffect, useState } from 'react';
@@ -105,14 +106,27 @@ export function Layout({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
 
-          {/* Theme toggle */}
-          <button
-            onClick={toggleTheme}
-            className="ml-auto p-2 rounded-md hover:bg-muted transition-colors"
-            title={`当前主题: ${theme}`}
-          >
-            {themeIcon[theme]}
-          </button>
+          {/* Theme toggle and Settings */}
+          <div className="ml-auto flex items-center gap-1">
+            <Link
+              to="/settings"
+              className={`p-2 rounded-md transition-colors ${
+                location.pathname === '/settings'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
+              title="设置"
+            >
+              <Settings className="w-5 h-5" />
+            </Link>
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-md hover:bg-muted transition-colors"
+              title={`当前主题: ${theme}`}
+            >
+              {themeIcon[theme]}
+            </button>
+          </div>
         </div>
       </header>
 

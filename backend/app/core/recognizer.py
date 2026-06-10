@@ -27,19 +27,29 @@ class FaceRecognizer:
 
     def _init_model(self):
         """初始化InsightFace模型"""
+        import os
+
+        # 先检查模型文件是否已下载
+        model_dir = os.path.expanduser(f"~/.insightface/models/{self.model_name}")
+        if not os.path.exists(model_dir):
+            print(f"InsightFace模型未下载: {model_dir}")
+            print("跳过人脸识别，所有图片将标记为 no_target")
+            self.app = None
+            return
+
         try:
             import insightface
             from insightface.app import FaceAnalysis
 
-            # 初始化FaceAnalysis
             self.app = FaceAnalysis(
                 name=self.model_name,
-                providers=['CPUExecutionProvider']  # 使用CPU，如有GPU可改为CUDAExecutionProvider
+                providers=['CPUExecutionProvider']
             )
             self.app.prepare(ctx_id=0, det_size=(640, 640))
+            print(f"InsightFace模型初始化成功: {self.model_name}")
+
         except Exception as e:
             print(f"InsightFace初始化失败: {e}")
-            print("将使用备用方案：face_recognition库")
             self.app = None
 
     def extract_embedding(self, image: np.ndarray, face_bbox: Optional[List[int]] = None) -> Optional[np.ndarray]:
@@ -56,25 +66,36 @@ class FaceRecognizer:
         if self.app is None:
             return self._extract_embedding_fallback(image, face_bbox)
 
-        # 如果提供了bbox，先裁剪
-        if face_bbox is not None:
-            x, y, w, h = face_bbox
-            # 扩展裁剪区域
-            pad = 0.3
-            x1 = max(0, int(x - w * pad))
-            y1 = max(0, int(y - h * pad))
-            x2 = min(image.shape[1], int(x + w * (1 + pad)))
-            y2 = min(image.shape[0], int(y + h * (1 + pad)))
-            face_img = image[y1:y2, x1:x2]
-        else:
-            face_img = image
-
-        # 检测并提取embedding
-        faces = self.app.get(face_img)
+        # 使用InsightFace在整张图上检测并提取embedding
+        faces = self.app.get(image)
         if len(faces) == 0:
             return None
 
-        # 返回最大人脸的embedding
+        # 如果提供了bbox，找到最匹配的脸
+        if face_bbox is not None:
+            bx, by, bw, bh = face_bbox
+            best_face = None
+            best_iou = 0
+            for face in faces:
+                fx1, fy1, fx2, fy2 = face.bbox
+                # 计算IoU
+                ix1 = max(bx, fx1)
+                iy1 = max(by, fy1)
+                ix2 = min(bx + bw, fx2)
+                iy2 = min(by + bh, fy2)
+                inter = max(0, ix2 - ix1) * max(0, iy2 - iy1)
+                union = bw * bh + (fx2 - fx1) * (fy2 - fy1) - inter
+                iou = inter / union if union > 0 else 0
+                if iou > best_iou:
+                    best_iou = iou
+                    best_face = face
+            if best_face is not None and best_iou > 0.1:
+                return best_face.embedding
+            # 如果IoU太低，返回最大的脸
+            largest_face = max(faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
+            return largest_face.embedding
+
+        # 没有bbox，返回最大的脸
         largest_face = max(faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
         return largest_face.embedding
 

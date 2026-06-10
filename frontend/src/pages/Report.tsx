@@ -9,6 +9,8 @@ import {
   Eye,
   FileText,
   PieChart,
+  RotateCcw,
+  Play,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -25,9 +27,16 @@ export function Report() {
   const [progress, setProgress] = useState<TaskProgress | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // 加载任务列表
+  useEffect(() => {
+    if (tasks.length === 0) {
+      tasksApi.list().then(res => setTasks(res.tasks)).catch(() => {});
+    }
+  }, []);
+
   useEffect(() => {
     loadData();
-  }, [taskId]);
+  }, [taskId, tasks]);
 
   useEffect(() => {
     // Poll progress if task is processing
@@ -85,6 +94,19 @@ export function Report() {
     }
   };
 
+  const handleRetry = async () => {
+    if (!selectedTask) return;
+    try {
+      await tasksApi.start(selectedTask.id);
+      addToast('任务已重新开始处理', 'success');
+      const updated = await tasksApi.get(selectedTask.id);
+      setSelectedTask(updated);
+      setTasks(tasks.map((t) => (t.id === updated.id ? updated : t)));
+    } catch (error) {
+      addToast('重新处理失败', 'error');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -134,6 +156,18 @@ export function Report() {
                 下载结果
               </Button>
             </>
+          )}
+          {(selectedTask.status === 'failed' || selectedTask.status === 'cancelled') && (
+            <Button onClick={handleRetry}>
+              <RotateCcw className="w-4 h-4 mr-2" />
+              重新处理
+            </Button>
+          )}
+          {selectedTask.status === 'pending' && (
+            <Button onClick={handleRetry}>
+              <Play className="w-4 h-4 mr-2" />
+              开始处理
+            </Button>
           )}
         </div>
       </div>
@@ -269,6 +303,7 @@ export function Report() {
                   <th className="text-center py-3 px-2 font-medium">状态</th>
                   <th className="text-center py-3 px-2 font-medium">人脸数</th>
                   <th className="text-center py-3 px-2 font-medium">匹配数</th>
+                  <th className="text-center py-3 px-2 font-medium">置信度</th>
                   <th className="text-right py-3 px-2 font-medium">耗时</th>
                 </tr>
               </thead>
@@ -283,6 +318,15 @@ export function Report() {
                     </td>
                     <td className="py-3 px-2 text-center">{result.faces_detected}</td>
                     <td className="py-3 px-2 text-center">{result.targets_matched}</td>
+                    <td className="py-3 px-2 text-center">
+                      {result.match_distance != null ? (
+                        <span className={result.match_distance < 0.4 ? 'text-green-600' : 'text-yellow-600'}>
+                          {result.match_distance.toFixed(4)}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </td>
                     <td className="py-3 px-2 text-right">{result.process_time_ms}ms</td>
                   </tr>
                 ))}

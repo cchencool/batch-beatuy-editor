@@ -205,7 +205,7 @@ export function Dashboard() {
 
 function TaskRow({ task, onClick }: { task: Task; onClick: () => void }) {
   const [starting, setStarting] = useState(false);
-  const { addToast, setTasks, tasks: allTasks } = useAppStore();
+  const { addToast, setTasks } = useAppStore();
 
   const statusColors = {
     pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
@@ -256,7 +256,7 @@ function TaskRow({ task, onClick }: { task: Task; onClick: () => void }) {
         </div>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
-        {task.status === 'pending' && (
+        {(task.status === 'pending' || task.status === 'failed') && (
           <Button
             size="sm"
             onClick={handleStart}
@@ -264,7 +264,7 @@ function TaskRow({ task, onClick }: { task: Task; onClick: () => void }) {
             className="gap-1"
           >
             <Play className="w-3 h-3" />
-            开始处理
+            {task.status === 'failed' ? '重新处理' : '开始处理'}
           </Button>
         )}
         <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[task.status]}`}>

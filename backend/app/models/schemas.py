@@ -88,8 +88,11 @@ class TaskCreate(BaseModel):
     """创建任务请求"""
     name: str = Field(..., min_length=1, max_length=200, description="任务名称")
     target_person_ids: List[int] = Field(..., min_length=1, description="目标人员ID列表")
-    file_ids: List[str] = Field(..., min_length=1, description="文件ID列表")
+    file_ids: List[str] = Field(default_factory=list, description="已上传文件ID列表")
+    file_paths: List[str] = Field(default_factory=list, description="直接文件路径列表（来自输入目录）")
     params: BeautifyParams = Field(default_factory=BeautifyParams)
+    input_dir: Optional[str] = Field(None, description="自定义输入目录（可选）")
+    output_dir: Optional[str] = Field(None, description="自定义输出目录（可选）")
 
 
 class ImageResult(BaseModel):
@@ -99,6 +102,7 @@ class ImageResult(BaseModel):
     status: str  # success, failed, no_target
     faces_detected: int = 0
     targets_matched: int = 0
+    match_distance: Optional[float] = None
     output_path: Optional[str] = None
     output_url: Optional[str] = None
     thumbnail_path: Optional[str] = None
@@ -129,6 +133,7 @@ class TaskResponse(BaseModel):
     beautify_strength: int
     edge_protection: int
     detail_preserve: int
+    input_files: List[dict] = []
     total_count: int
     processed_count: int
     success_count: int

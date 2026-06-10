@@ -1,7 +1,7 @@
 """
 数据库模型和初始化
 """
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, JSON, Text
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, JSON, Text, create_engine
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
 from datetime import datetime
@@ -9,16 +9,28 @@ import os
 
 from app.core.config import settings
 
-# 创建异步引擎
+# 异步引擎（用于 FastAPI 请求）
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
+)
+
+# 同步引擎（用于后台线程）
+sync_engine = create_engine(
+    settings.DATABASE_URL.replace("sqlite+aiosqlite", "sqlite"),
+    echo=False,
+    connect_args={"check_same_thread": False},
 )
 
 # 创建会话工厂
 async_session = sessionmaker(
     engine,
     class_=AsyncSession,
+    expire_on_commit=False
+)
+
+sync_session = sessionmaker(
+    sync_engine,
     expire_on_commit=False
 )
 
@@ -59,6 +71,7 @@ class Task(Base):
 
     # 文件信息
     input_files = Column(JSON, default=list)  # 输入文件列表
+    input_dir = Column(String(500), nullable=True)  # 自定义输入目录
     output_dir = Column(String(500), nullable=True)  # 输出目录
 
     # 进度和统计

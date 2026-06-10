@@ -57,23 +57,32 @@ class BeautyPipeline:
         target_embeddings = []
 
         for person in self.persons:
+            print(f"Processing person: {person.name} (id={person.id})")
+            print(f"  reference_photos: {person.reference_photos}")
             if not person.reference_photos:
+                print(f"  No reference photos, skipping")
                 continue
 
             embeddings = []
             for photo_path in person.reference_photos:
+                print(f"  Loading photo: {photo_path}")
                 if not os.path.exists(photo_path):
+                    print(f"  Photo not found: {photo_path}")
                     continue
 
                 # 读取照片
                 img = cv2.imread(photo_path)
                 if img is None:
+                    print(f"  Cannot read photo: {photo_path}")
                     continue
 
                 # 提取embedding
                 emb = self.recognizer.extract_embedding(img)
                 if emb is not None:
                     embeddings.append(emb)
+                    print(f"  OK: extracted embedding")
+                else:
+                    print(f"  Failed to extract embedding")
 
             if embeddings:
                 target_embeddings.append({
@@ -81,7 +90,11 @@ class BeautyPipeline:
                     "person_name": person.name,
                     "embeddings": embeddings
                 })
+                print(f"Loaded {len(embeddings)} embeddings for person {person.name} (id={person.id})")
+            else:
+                print(f"No valid embeddings for person {person.name}")
 
+        print(f"Total target embeddings: {len(target_embeddings)}")
         return target_embeddings
 
     def process_image(self, image_path: str, output_dir: str) -> Dict:
@@ -136,6 +149,7 @@ class BeautyPipeline:
 
             # 步骤2：识别目标人员
             target_faces = []
+            print(f"Matching against {len(self.target_embeddings)} targets, threshold={self.recognizer.threshold}")
             for face in faces:
                 # 提取embedding
                 emb = self.recognizer.extract_embedding(image, face['bbox'])
@@ -144,12 +158,18 @@ class BeautyPipeline:
 
                 # 匹配目标人员
                 person_id, distance = self.recognizer.match_person(emb, self.target_embeddings)
+                print(f"  Face bbox={face['bbox']}, distance={distance:.4f}, matched={person_id}")
                 if person_id is not None:
                     face["matched_person_id"] = person_id
                     face["match_distance"] = distance
                     target_faces.append(face)
 
             result["targets_matched"] = len(target_faces)
+
+            # 记录最小匹配距离
+            if target_faces:
+                min_distance = min(f.get("match_distance", float('inf')) for f in target_faces)
+                result["match_distance"] = round(float(min_distance), 4)
 
             if len(target_faces) == 0:
                 # 未匹配到目标人员

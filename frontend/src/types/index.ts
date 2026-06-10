@@ -43,6 +43,7 @@ export interface ImageResult {
   status: 'success' | 'failed' | 'no_target';
   faces_detected: number;
   targets_matched: number;
+  match_distance?: number;
   output_path?: string;
   output_url?: string;
   thumbnail_path?: string;
@@ -60,6 +61,7 @@ export interface Task {
   beautify_strength: number;
   edge_protection: number;
   detail_preserve: number;
+  input_files: { id: string; filename: string; path: string }[];
   total_count: number;
   processed_count: number;
   success_count: number;

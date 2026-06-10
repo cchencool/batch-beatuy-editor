@@ -100,6 +100,71 @@ export const filesApi = {
     const { data } = await api.delete('/files/');
     return data;
   },
+
+  // 路径管理
+  getPaths: async (): Promise<{ default_input: string; default_output: string; input_paths: string[]; output_paths: string[] }> => {
+    const { data } = await api.get('/files/paths');
+    return data;
+  },
+
+  listDirs: async (path: string): Promise<{ current: string; parent: string | null; dirs: { name: string; path: string }[] }> => {
+    const { data } = await api.get('/files/list-dirs', { params: { path } });
+    return data;
+  },
+
+  scanDir: async (path: string): Promise<{ path: string; exists: boolean; is_dir: boolean; files: { id: string; name: string; path: string; size: number; extension: string }[] }> => {
+    const { data } = await api.get('/files/scan', { params: { path } });
+    return data;
+  },
+
+  // 应用设置
+  getSettings: async (): Promise<{ work_dir: string }> => {
+    const { data } = await api.get('/files/settings');
+    return data;
+  },
+
+  updateSettings: async (workDir: string): Promise<{ success: boolean; work_dir: string }> => {
+    const { data } = await api.post('/files/settings', { work_dir: workDir });
+    return data;
+  },
+
+  // 安全目录浏览（限制在工作路径内）
+  listWorkDirs: async (path?: string): Promise<{ current: string; parent: string | null; dirs: { name: string; path: string }[] }> => {
+    const params = path ? { path } : {};
+    const { data } = await api.get('/files/work-dirs', { params });
+    return data;
+  },
+
+  // 缩略图生成
+  generateThumbnails: async (path: string): Promise<{ success: boolean; count: number; thumb_dir: string }> => {
+    const { data } = await api.post('/files/thumbnails', { path });
+    return data;
+  },
+
+  // 获取缩略图
+  getThumbUrl: (path: string): string => {
+    return `/api/files/thumb?path=${encodeURIComponent(path)}`;
+  },
+
+  // 获取原始图片
+  getImageUrl: (path: string): string => {
+    return `/api/files/image?path=${encodeURIComponent(path)}`;
+  },
+
+  savePath: async (path: string, type: 'input' | 'output'): Promise<{ success: boolean; paths: string[] }> => {
+    const { data } = await api.post('/files/paths', { path, type });
+    return data;
+  },
+
+  deletePath: async (path: string, type: 'input' | 'output'): Promise<{ success: boolean; paths: string[] }> => {
+    const { data } = await api.delete('/files/paths', { data: { path, type } });
+    return data;
+  },
+
+  reorderPaths: async (paths: string[], type: 'input' | 'output'): Promise<{ success: boolean; paths: string[] }> => {
+    const { data } = await api.put('/files/paths/reorder', { paths, type });
+    return data;
+  },
 };
 
 // 任务管理 API
@@ -119,13 +184,19 @@ export const tasksApi = {
     name: string,
     targetPersonIds: number[],
     fileIds: string[],
-    params: BeautifyParams
+    params: BeautifyParams,
+    inputDir?: string,
+    outputDir?: string,
+    filePaths?: string[]
   ): Promise<Task> => {
     const { data } = await api.post('/tasks/', {
       name,
       target_person_ids: targetPersonIds,
       file_ids: fileIds,
+      file_paths: filePaths || [],
       params,
+      input_dir: inputDir || undefined,
+      output_dir: outputDir || undefined,
     });
     return data;
   },

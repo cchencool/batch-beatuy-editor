@@ -50,6 +50,7 @@ def _result_to_image_result(r: dict) -> ImageResult:
         status=r.get("status", "failed"),
         faces_detected=r.get("faces_detected", 0),
         targets_matched=r.get("targets_matched", 0),
+        match_distance=r.get("match_distance"),
         output_path=r.get("output_path"),
         output_url=_path_to_url(r["output_path"]) if r.get("output_path") else None,
         thumbnail_path=r.get("thumbnail_path"),
@@ -74,6 +75,14 @@ def _task_to_response(task: Task) -> TaskResponse:
             else:
                 results.append(r)
 
+    # 解析 input_files
+    input_files = task.input_files or []
+    if isinstance(input_files, str):
+        try:
+            input_files = json.loads(input_files)
+        except Exception:
+            input_files = []
+
     return TaskResponse(
         id=task.id,
         name=task.name,
@@ -82,6 +91,7 @@ def _task_to_response(task: Task) -> TaskResponse:
         beautify_strength=task.beautify_strength,
         edge_protection=task.edge_protection,
         detail_preserve=task.detail_preserve,
+        input_files=input_files,
         total_count=task.total_count,
         processed_count=task.processed_count,
         success_count=task.success_count,
@@ -170,7 +180,7 @@ async def create_task(
         if not result.scalar_one_or_none():
             raise HTTPException(status_code=400, detail=f"人员ID {person_id} 不存在")
 
-    # 验证文件存在
+    # 验证文件存在（支持 file_ids 和 file_paths 两种方式）
     input_files = []
     for file_id in task_data.file_ids:
         file_info = get_file_by_id(file_id)
@@ -180,16 +190,27 @@ async def create_task(
                 "filename": file_info.filename,
                 "path": file_info.original_path
             })
+    for file_path in task_data.file_paths:
+        if os.path.isfile(file_path):
+            input_files.append({
+                "id": os.path.splitext(os.path.basename(file_path))[0],
+                "filename": os.path.basename(file_path),
+                "path": file_path
+            })
 
     if not input_files:
         raise HTTPException(status_code=400, detail="没有有效的输入文件")
 
     # 创建输出目录
-    output_dir = os.path.join(
-        settings.OUTPUTS_DIR,
-        f"{datetime.now().strftime('%Y-%m-%d')}_{task_data.name}_{datetime.now().strftime('%H-%M-%S')}"
-    )
-    os.makedirs(output_dir, exist_ok=True)
+    if task_data.output_dir:
+        output_dir = task_data.output_dir
+        os.makedirs(output_dir, exist_ok=True)
+    else:
+        output_dir = os.path.join(
+            settings.OUTPUTS_DIR,
+            f"{datetime.now().strftime('%Y-%m-%d')}_{task_data.name}_{datetime.now().strftime('%H-%M-%S')}"
+        )
+        os.makedirs(output_dir, exist_ok=True)
 
     # 创建任务
     task = Task(
@@ -200,6 +221,7 @@ async def create_task(
         edge_protection=task_data.params.edge_protection,
         detail_preserve=task_data.params.detail_preserve,
         input_files=input_files,
+        input_dir=task_data.input_dir,
         output_dir=output_dir,
         total_count=len(input_files),
         results=[]
@@ -332,6 +354,8 @@ async def process_task_background(task_id: int):
     logger = logging.getLogger(__name__)
     from app.models.database import async_session
 
+    loop = asyncio.get_running_loop()
+
     # 初始化处理控制
     processing_tasks[task_id] = {"pause": False, "cancel": False}
 
@@ -358,57 +382,57 @@ async def process_task_background(task_id: int):
             # 导入核心处理模块
             from app.core.pipeline import BeautyPipeline
 
-            pipeline = BeautyPipeline(
-                persons=persons,
-                strength=task.beautify_strength,
-                edge_protection=task.edge_protection,
-                detail_preserve=task.detail_preserve
-            )
-
-            # 处理每张图片
-            results = []
-            for i, file_info in enumerate(task.input_files):
-                # 检查暂停/取消
-                if processing_tasks[task_id]["cancel"]:
-                    task.status = "cancelled"
-                    await db.commit()
-                    return
-
-                while processing_tasks[task_id]["pause"]:
-                    await asyncio.sleep(0.5)
+            # 整个处理逻辑在线程池中执行，避免阻塞事件循环
+            def _process_all():
+                pipeline = BeautyPipeline(
+                    persons=persons,
+                    strength=task.beautify_strength,
+                    edge_protection=task.edge_protection,
+                    detail_preserve=task.detail_preserve
+                )
+                results = []
+                for i, file_info in enumerate(task.input_files):
                     if processing_tasks[task_id]["cancel"]:
-                        task.status = "cancelled"
-                        await db.commit()
-                        return
+                        break
+                    while processing_tasks[task_id]["pause"]:
+                        import time
+                        time.sleep(0.5)
+                        if processing_tasks[task_id]["cancel"]:
+                            break
+                    if processing_tasks[task_id]["cancel"]:
+                        break
+                    try:
+                        result = pipeline.process_image(
+                            file_info["path"],
+                            task.output_dir
+                        )
+                        results.append(result)
+                    except Exception as e:
+                        logger.error(f"Failed to process {file_info['filename']}: {e}")
+                        results.append({
+                            "file_id": file_info["id"],
+                            "filename": file_info["filename"],
+                            "status": "failed",
+                            "error_message": str(e)
+                        })
+                return results
 
-                # 处理单张图片
-                try:
-                    result = await pipeline.process_image(
-                        file_info["path"],
-                        task.output_dir
-                    )
-                    results.append(result)
+            all_results = await loop.run_in_executor(None, _process_all)
 
-                    if result["status"] == "success":
-                        task.success_count += 1
-                    elif result["status"] == "no_target":
-                        task.no_target_count += 1
-                    else:
-                        task.failed_count += 1
+            # 更新数据库（回到 async 上下文）
+            results = all_results
 
-                except Exception as e:
-                    logger.error(f"Failed to process {file_info['filename']}: {e}")
-                    results.append({
-                        "file_id": file_info["id"],
-                        "filename": file_info["filename"],
-                        "status": "failed",
-                        "error_message": str(e)
-                    })
-                    task.failed_count += 1
-
-                task.processed_count += 1
-                task.results = results
+            # 检查是否被取消
+            if processing_tasks.get(task_id, {}).get("cancel"):
+                task.status = "cancelled"
                 await db.commit()
+                return
+
+            task.processed_count = len(results)
+            task.success_count = sum(1 for r in results if r.get("status") == "success")
+            task.no_target_count = sum(1 for r in results if r.get("status") == "no_target")
+            task.failed_count = sum(1 for r in results if r.get("status") == "failed")
+            task.results = results
 
             # 完成处理
             task.status = "completed"

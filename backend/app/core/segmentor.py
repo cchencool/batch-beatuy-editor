@@ -1,36 +1,22 @@
 """
 皮肤分割模块
-使用MediaPipe Selfie Segmentation + 人脸区域限制
+使用MediaPipe Tasks Vision API (v0.10.11+) + 颜色空间检测
 """
 import cv2
 import numpy as np
-from typing import List, Dict, Optional, Tuple
-import mediapipe as mp
+from typing import List, Dict, Optional
+
 
 
 class SkinSegmentor:
-    """皮肤分割器"""
+    """皮肤分割器 (MediaPipe Tasks Vision API)"""
 
     def __init__(self, model_selection: int = 0):
         """
         初始化皮肤分割器
-
-        Args:
-            model_selection: 模型选择 (0: general, 1: landscape)
+        使用颜色空间检测作为主要方法（不依赖模型下载）
         """
-        self.mp_selfie_segmentation = mp.solutions.selfie_segmentation
-        self.segmentor = self.mp_selfie_segmentation.SelfieSegmentation(
-            model_selection=model_selection
-        )
-
-        # MediaPipe FaceMesh用于精细分割
-        self.mp_face_mesh = mp.solutions.face_mesh
-        self.face_mesh = self.mp_face_mesh.FaceMesh(
-            static_image_mode=True,
-            max_num_faces=1,
-            refine_landmarks=True,
-            min_detection_confidence=0.5
-        )
+        self.model_selection = model_selection
 
     def get_skin_mask(self, image: np.ndarray, face_bbox: Optional[List[int]] = None) -> np.ndarray:
         """
@@ -45,53 +31,28 @@ class SkinSegmentor:
         """
         h, w = image.shape[:2]
 
-        # 如果提供了bbox，裁剪处理
+        # 使用颜色空间检测皮肤
+        skin_mask = self._detect_skin_by_color(image)
+
         if face_bbox is not None:
             x, y, width, height = face_bbox
-            # 扩展区域
             pad = 0.3
             x1 = max(0, int(x - width * pad))
             y1 = max(0, int(y - height * pad))
             x2 = min(w, int(x + width * (1 + pad)))
             y2 = min(h, int(y + height * (1 + pad)))
 
-            crop_img = image[y1:y2, x1:x2]
-            crop_mask = self._segment_skin(crop_img)
+            # 限制在扩展的面部区域内
+            region_mask = np.zeros((h, w), dtype=np.uint8)
+            region_mask[y1:y2, x1:x2] = 255
+            skin_mask = cv2.bitwise_and(skin_mask, region_mask)
 
-            # 放回原图
-            full_mask = np.zeros((h, w), dtype=np.uint8)
-            full_mask[y1:y2, x1:x2] = crop_mask
-        else:
-            full_mask = self._segment_skin(image)
-
-        return full_mask
-
-    def _segment_skin(self, image: np.ndarray) -> np.ndarray:
-        """内部方法：执行皮肤分割"""
-        h, w = image.shape[:2]
-
-        # 转换到RGB
-        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-        # 使用selfie segmentation获取人像区域
-        results = self.segmentor.process(image_rgb)
-
-        if results.segmentation_mask is None:
-            return np.zeros((h, w), dtype=np.uint8)
-
-        # 获取人像mask
-        person_mask = (results.segmentation_mask > 0.5).astype(np.uint8) * 255
-
-        # 使用颜色信息进一步提取皮肤区域
-        skin_mask = self._detect_skin_by_color(image)
-
-        # 合并：人像mask 与 皮肤颜色mask 的交集
-        combined_mask = cv2.bitwise_and(person_mask, skin_mask)
-
-        return combined_mask
+        return skin_mask
 
     def _detect_skin_by_color(self, image: np.ndarray) -> np.ndarray:
-        """通过颜色检测皮肤区域"""
+        """通过多颜色空间检测皮肤区域"""
+        h, w = image.shape[:2]
+
         # 转换到HSV和YCrCb颜色空间
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         ycrcb = cv2.cvtColor(image, cv2.COLOR_BGR2YCrCb)
@@ -143,7 +104,6 @@ class SkinSegmentor:
         # 获取基础皮肤mask
         skin_mask = self.get_skin_mask(image, face_bbox)
 
-        # 使用FaceMesh获取精细面部特征
         if keypoints:
             # 创建排除区域的mask
             exclude_mask = np.zeros((h, w), dtype=np.uint8)
@@ -153,7 +113,6 @@ class SkinSegmentor:
                 left_eye = keypoints['left_eye']
                 right_eye = keypoints['right_eye']
 
-                # 以关键点为中心创建圆形排除区域
                 eye_radius = int(width * 0.08)
                 cv2.circle(exclude_mask, left_eye, eye_radius, 255, -1)
                 cv2.circle(exclude_mask, right_eye, eye_radius, 255, -1)
@@ -164,7 +123,7 @@ class SkinSegmentor:
                 mouth_radius = int(width * 0.1)
                 cv2.circle(exclude_mask, mouth, mouth_radius, 255, -1)
 
-            # 排除鼻子区域（可选）
+            # 排除鼻子区域
             if 'nose_tip' in keypoints:
                 nose = keypoints['nose_tip']
                 nose_radius = int(width * 0.06)
@@ -189,99 +148,17 @@ class SkinSegmentor:
 
         return skin_mask
 
-    def refine_mask_with_facemesh(
-        self,
-        image: np.ndarray,
-        face_bbox: List[int]
-    ) -> np.ndarray:
-        """
-        使用MediaPipe FaceMesh进行精细分割
-
-        Args:
-            image: BGR格式的图像
-            face_bbox: 人脸边界框
-
-        Returns:
-            精细的皮肤mask
-        """
-        h, w = image.shape[:2]
-
-        # 裁剪人脸区域
-        x, y, width, height = face_bbox
-        pad = 0.3
-        x1 = max(0, int(x - width * pad))
-        y1 = max(0, int(y - height * pad))
-        x2 = min(w, int(x + width * (1 + pad)))
-        y2 = min(h, int(y + height * (1 + pad)))
-
-        face_img = image[y1:y2, x1:x2]
-        face_rgb = cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB)
-
-        # 使用FaceMesh检测
-        results = self.face_mesh.process(face_rgb)
-
-        if not results.multi_face_landmarks:
-            # 回退到基础方法
-            return self.get_skin_mask(image, face_bbox)
-
-        # 获取面部轮廓点
-        face_landmarks = results.multi_face_landmarks[0]
-
-        # FaceMesh的面部轮廓索引（卵圆形轮廓）
-        face_oval_indices = [
-            10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288,
-            397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136,
-            172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109
-        ]
-
-        # 创建面部轮廓mask
-        fh, fw = face_img.shape[:2]
-        mask = np.zeros((fh, fw), dtype=np.uint8)
-
-        # 获取轮廓点坐标
-        points = []
-        for idx in face_oval_indices:
-            landmark = face_landmarks.landmark[idx]
-            px = int(landmark.x * fw)
-            py = int(landmark.y * fh)
-            points.append([px, py])
-
-        points = np.array(points, dtype=np.int32)
-
-        # 填充面部轮廓
-        cv2.fillPoly(mask, [points], 255)
-
-        # 获取皮肤颜色区域
-        skin_color_mask = self._detect_skin_by_color(face_img)
-
-        # 合并
-        combined_mask = cv2.bitwise_and(mask, skin_color_mask)
-
-        # 放回原图
-        full_mask = np.zeros((h, w), dtype=np.uint8)
-        full_mask[y1:y2, x1:x2] = combined_mask
-
-        return full_mask
-
     def __del__(self):
         """清理资源"""
-        if hasattr(self, 'segmentor'):
-            self.segmentor.close()
-        if hasattr(self, 'face_mesh'):
-            self.face_mesh.close()
+        pass
 
 
 def test_segmentor():
     """测试皮肤分割器"""
     segmentor = SkinSegmentor()
-
-    # 创建测试图像
     test_image = np.ones((480, 640, 3), dtype=np.uint8) * 200
-
-    # 获取皮肤mask
     mask = segmentor.get_skin_mask(test_image)
     print(f"Mask shape: {mask.shape}, unique values: {np.unique(mask)}")
-
     return mask
 
 

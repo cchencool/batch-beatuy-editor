@@ -4,6 +4,7 @@
 from pydantic_settings import BaseSettings
 from typing import List
 import os
+import json
 
 
 class Settings(BaseSettings):
@@ -23,6 +24,15 @@ class Settings(BaseSettings):
     PERSONS_DIR: str = os.path.join(DATA_DIR, "persons")
     UPLOADS_DIR: str = os.path.join(DATA_DIR, "uploads")
     OUTPUTS_DIR: str = os.path.join(DATA_DIR, "outputs")
+    PATH_HISTORY_FILE: str = os.path.join(DATA_DIR, "path_history.json")
+    SETTINGS_FILE: str = os.path.join(DATA_DIR, "settings.json")
+
+    # 工作路径（可通过设置修改）
+    WORK_DIR: str = "/Users/chen/Development/debug/batch-beatuy-editor"
+
+    # 默认路径
+    DEFAULT_INPUT_DIR: str = os.path.expanduser("~/Downloads")
+    DEFAULT_OUTPUT_DIR: str = os.path.join(DATA_DIR, "outputs")
 
     # 数据库配置
     DATABASE_URL: str = "sqlite+aiosqlite:///./data/beauty.db"
@@ -46,3 +56,40 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def load_settings() -> dict:
+    """从文件加载设置"""
+    if os.path.exists(settings.SETTINGS_FILE):
+        try:
+            with open(settings.SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"work_dir": settings.WORK_DIR}
+
+
+def save_settings(data: dict):
+    """保存设置到文件"""
+    os.makedirs(os.path.dirname(settings.SETTINGS_FILE), exist_ok=True)
+    with open(settings.SETTINGS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def get_work_dir() -> str:
+    """获取当前工作路径"""
+    saved = load_settings()
+    work_dir = saved.get("work_dir", settings.WORK_DIR)
+    # 确保路径存在
+    os.makedirs(work_dir, exist_ok=True)
+    return work_dir
+
+
+def is_safe_path(base_dir: str, target_path: str) -> bool:
+    """检查目标路径是否在基础路径内（防止路径遍历攻击）"""
+    try:
+        base = os.path.realpath(base_dir)
+        target = os.path.realpath(target_path)
+        return target.startswith(base + os.sep) or target == base
+    except Exception:
+        return False

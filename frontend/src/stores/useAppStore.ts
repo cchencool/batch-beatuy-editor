@@ -29,6 +29,8 @@ interface AppState {
     targetPersonIds: number[];
     fileIds: string[];
     params: BeautifyParams;
+    inputDir: string;
+    outputDir: string;
   };
   setCurrentTaskConfig: (config: Partial<AppState['currentTaskConfig']>) => void;
   resetCurrentTaskConfig: () => void;
@@ -91,6 +93,8 @@ export const useAppStore = create<AppState>()(
           edge_protection: 70,
           detail_preserve: 60,
         },
+        inputDir: '',
+        outputDir: '',
       },
       setCurrentTaskConfig: (config) =>
         set((state) => ({
@@ -107,6 +111,8 @@ export const useAppStore = create<AppState>()(
               edge_protection: 70,
               detail_preserve: 60,
             },
+            inputDir: '',
+            outputDir: '',
           },
         }),
 

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Check, AlertTriangle, Maximize2 } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { tasksApi } from '../services/api';
+import { tasksApi, filesApi } from '../services/api';
 import type { Task, ImageResult } from '../types';
 
 export function Review() {
@@ -18,8 +18,27 @@ export function Review() {
   useEffect(() => {
     if (taskId) {
       loadTask(parseInt(taskId));
+    } else {
+      // 没有指定taskId时，加载最近完成的任务
+      loadLatestTask();
     }
   }, [taskId]);
+
+  const loadLatestTask = async () => {
+    try {
+      setLoading(true);
+      const res = await tasksApi.list();
+      const completedTask = res.tasks.find(t => t.status === 'completed' && t.results.length > 0);
+      if (completedTask) {
+        navigate(`/review/${completedTask.id}`, { replace: true });
+      } else {
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error('Failed to load tasks:', error);
+      setLoading(false);
+    }
+  };
 
   const loadTask = async (id: number) => {
     try {
@@ -116,51 +135,70 @@ export function Review() {
         <div className="lg:col-span-3">
           <Card>
             <CardContent className="p-4">
-              {currentResult.status === 'success' && currentResult.output_url ? (
+              {currentResult.output_url ? (
                 <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
-                  {/* Original Image */}
-                  <img
-                    src={`/static/uploads/${currentResult.file_id}${currentResult.filename.match(/\.\w+$/)?.[0] || '.jpg'}`}
-                    alt="Original"
-                    className="absolute inset-0 w-full h-full object-contain"
-                    style={{ clipPath: showSlider ? `inset(0 ${100 - sliderPosition}% 0 0)` : undefined }}
-                  />
+                  {currentResult.status === 'success' ? (
+                    <>
+                      {/* Original Image - 从 input_files 中查找原始路径 */}
+                      <img
+                        src={filesApi.getImageUrl(
+                          task.input_files.find(f => f.id === currentResult.file_id)?.path ||
+                          currentResult.output_path?.replace(/beautified_/, 'original_') || ''
+                        )}
+                        alt="Original"
+                        className="absolute inset-0 w-full h-full object-contain"
+                        style={{ clipPath: showSlider ? `inset(0 ${100 - sliderPosition}% 0 0)` : undefined }}
+                      />
 
-                  {/* Processed Image */}
-                  <img
-                    src={currentResult.output_url}
-                    alt="Processed"
-                    className="absolute inset-0 w-full h-full object-contain"
-                    style={{ clipPath: showSlider ? `inset(0 0 0 ${sliderPosition}%)` : undefined }}
-                  />
+                      {/* Processed Image */}
+                      <img
+                        src={filesApi.getImageUrl(currentResult.output_path || '')}
+                        alt="Processed"
+                        className="absolute inset-0 w-full h-full object-contain"
+                        style={{ clipPath: showSlider ? `inset(0 0 0 ${sliderPosition}%)` : undefined }}
+                      />
 
-                  {/* Slider */}
-                  {showSlider && (
-                    <div
-                      className="absolute inset-0 cursor-col-resize"
-                      onClick={handleSliderMove}
-                      onMouseMove={(e) => e.buttons === 1 && handleSliderMove(e)}
-                    >
-                      <div
-                        className="absolute top-0 bottom-0 w-0.5 bg-white shadow-lg"
-                        style={{ left: `${sliderPosition}%` }}
-                      >
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white shadow-lg flex items-center justify-center">
-                          <div className="flex gap-0.5">
-                            <ChevronLeft className="w-3 h-3" />
-                            <ChevronRight className="w-3 h-3" />
+                      {/* Slider */}
+                      {showSlider && (
+                        <div
+                          className="absolute inset-0 cursor-col-resize"
+                          onClick={handleSliderMove}
+                          onMouseMove={(e) => e.buttons === 1 && handleSliderMove(e)}
+                        >
+                          <div
+                            className="absolute top-0 bottom-0 w-0.5 bg-white shadow-lg"
+                            style={{ left: `${sliderPosition}%` }}
+                          >
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white shadow-lg flex items-center justify-center">
+                              <div className="flex gap-0.5">
+                                <ChevronLeft className="w-3 h-3" />
+                                <ChevronRight className="w-3 h-3" />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Labels */}
+                          <div className="absolute top-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm">
+                            原图
+                          </div>
+                          <div className="absolute top-4 right-4 px-2 py-1 rounded bg-black/60 text-white text-sm">
+                            处理后
                           </div>
                         </div>
-                      </div>
-
-                      {/* Labels */}
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {/* Show output image directly for no_target/failed */}
+                      <img
+                        src={currentResult.output_url}
+                        alt={currentResult.filename}
+                        className="w-full h-full object-contain"
+                      />
                       <div className="absolute top-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm">
-                        原图
+                        {currentResult.status === 'no_target' ? '未匹配到目标' : '处理失败'}
                       </div>
-                      <div className="absolute top-4 right-4 px-2 py-1 rounded bg-black/60 text-white text-sm">
-                        处理后
-                      </div>
-                    </div>
+                    </>
                   )}
                 </div>
               ) : (
@@ -168,9 +206,7 @@ export function Review() {
                   <div className="text-center">
                     <AlertTriangle className="w-12 h-12 mx-auto mb-2 text-muted-foreground" />
                     <p className="text-muted-foreground">
-                      {currentResult.status === 'no_target'
-                        ? '未检测到目标人员'
-                        : '处理失败'}
+                      {currentResult.error_message || '无法加载图片'}
                     </p>
                   </div>
                 </div>
@@ -314,9 +350,9 @@ function ThumbnailItem({
       onClick={onClick}
     >
       <div className="w-full h-full bg-muted flex items-center justify-center">
-        {result.thumbnail_url ? (
+        {result.output_path ? (
           <img
-            src={result.thumbnail_url}
+            src={filesApi.getImageUrl(result.thumbnail_path || result.output_path)}
             alt={result.filename}
             className="w-full h-full object-cover"
             onError={(e) => {
