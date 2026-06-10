@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     SETTINGS_FILE: str = os.path.join(DATA_DIR, "settings.json")
 
     # 工作路径（可通过设置修改）
-    WORK_DIR: str = "/Users/chen/Development/debug/batch-beatuy-editor"
+    WORK_DIR: str = os.path.expanduser("~/Development/debug/batch-beatuy-editor")
 
     # 默认路径
     DEFAULT_INPUT_DIR: str = os.path.expanduser("~/Downloads")
