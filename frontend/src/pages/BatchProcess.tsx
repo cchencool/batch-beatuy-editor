@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Upload, X, Play, RotateCcw, User, Settings2, FolderOpen, Check } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
@@ -25,6 +25,33 @@ export function BatchProcess() {
   const [dirFiles, setDirFiles] = useState<DirFile[]>([]);
   const [selectedDirFiles, setSelectedDirFiles] = useState<string[]>([]);
   const [loadingDir, setLoadingDir] = useState(false);
+  const [gridCols, setGridCols] = useState(() => parseInt(localStorage.getItem('beauty-grid-cols') || '6'));
+  const [gridHeight, setGridHeight] = useState(() => parseInt(localStorage.getItem('beauty-grid-height') || '320'));
+  const resizeRef = useRef({ startY: 0, startHeight: 0, isResizing: false });
+
+  const saveGridCols = (cols: number) => {
+    setGridCols(cols);
+    localStorage.setItem('beauty-grid-cols', String(cols));
+  };
+
+  // 拖拽调整高度
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    resizeRef.current = { startY: e.clientY, startHeight: gridHeight, isResizing: true };
+    const handleMove = (e: MouseEvent) => {
+      if (!resizeRef.current.isResizing) return;
+      const newH = Math.max(160, Math.min(800, resizeRef.current.startHeight + (e.clientY - resizeRef.current.startY)));
+      setGridHeight(newH);
+      localStorage.setItem('beauty-grid-height', String(newH));
+    };
+    const handleUp = () => {
+      resizeRef.current.isResizing = false;
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleUp);
+    };
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleUp);
+  };
 
   // 加载人员列表
   useEffect(() => {
@@ -222,8 +249,26 @@ export function BatchProcess() {
                       >
                         {selectedDirFiles.length === dirFiles.length ? '取消全选' : '全选'}
                       </button>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">缩略图:</span>
+                        <button
+                          onClick={() => saveGridCols(Math.max(4, gridCols - 2))}
+                          className="text-xs px-1.5 py-0.5 rounded bg-muted hover:bg-muted/80"
+                        >-</button>
+                        <span className="text-xs text-muted-foreground w-4 text-center">{gridCols}</span>
+                        <button
+                          onClick={() => saveGridCols(Math.min(12, gridCols + 2))}
+                          className="text-xs px-1.5 py-0.5 rounded bg-muted hover:bg-muted/80"
+                        >+</button>
+                      </div>
                     </div>
-                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-64 overflow-y-auto">
+                    <div
+                      className="grid gap-2 overflow-y-auto"
+                      style={{
+                        gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`,
+                        maxHeight: `${gridHeight}px`,
+                      }}
+                    >
                       {dirFiles.map((file) => {
                         const isSelected = selectedDirFiles.includes(file.path);
                         const thumbUrl = filesApi.getThumbUrl(file.path);
@@ -256,6 +301,13 @@ export function BatchProcess() {
                           </button>
                         );
                       })}
+                    </div>
+                    {/* 拖拽调整高度手柄 */}
+                    <div
+                      className="flex items-center justify-center h-3 mt-2 cursor-row-resize group"
+                      onMouseDown={handleResizeStart}
+                    >
+                      <div className="w-8 h-1 rounded-full bg-muted-foreground/30 group-hover:bg-muted-foreground/60 transition-colors" />
                     </div>
                   </>
                 )}

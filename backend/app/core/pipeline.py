@@ -8,11 +8,27 @@ from typing import List, Dict, Optional
 import os
 import time
 from datetime import datetime
+from PIL import Image
 
 from app.core.detector import FaceDetector
 from app.core.recognizer import FaceRecognizer
 from app.core.segmentor import SkinSegmentor
 from app.core.beautifier import SkinBeautifier
+
+
+def cv_imread_with_orientation(path: str) -> Optional[np.ndarray]:
+    """读取图片并应用 EXIF 方向信息"""
+    try:
+        # 用 PIL 读取并应用 EXIF 方向
+        pil_img = Image.open(path)
+        from PIL import ImageOps
+        pil_img = ImageOps.exif_transpose(pil_img)
+        # 转为 BGR (OpenCV 格式)
+        rgb = np.array(pil_img)
+        return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    except Exception:
+        # 降级到 OpenCV
+        return cv2.imread(path)
 
 
 class BeautyPipeline:
@@ -70,8 +86,8 @@ class BeautyPipeline:
                     print(f"  Photo not found: {photo_path}")
                     continue
 
-                # 读取照片
-                img = cv2.imread(photo_path)
+                # 读取照片（含 EXIF 方向）
+                img = cv_imread_with_orientation(photo_path)
                 if img is None:
                     print(f"  Cannot read photo: {photo_path}")
                     continue
@@ -127,8 +143,8 @@ class BeautyPipeline:
         }
 
         try:
-            # 读取图像
-            image = cv2.imread(image_path)
+            # 读取图像（含 EXIF 方向）
+            image = cv_imread_with_orientation(image_path)
             if image is None:
                 result["status"] = "failed"
                 result["error_message"] = "无法读取图片"
