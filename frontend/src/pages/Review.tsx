@@ -27,8 +27,6 @@ export function Review() {
 
   // 分隔线拖拽状态
   const isDraggingDivider = useRef(false);
-  const dividerStartX = useRef(0);
-  const dividerStartPos = useRef(50);
 
   useEffect(() => {
     if (taskId) {
@@ -126,22 +124,30 @@ export function Review() {
     }
   };
 
-  // 分隔线拖拽 - 使用 delta 移动，转换为图片坐标
+  // 分隔线拖拽 - 直接计算绝对位置
   const handleDividerDragStart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     isDraggingDivider.current = true;
-    dividerStartX.current = e.clientX;
-    dividerStartPos.current = sliderPosition;
 
-    const containerWidth = containerRef.current?.clientWidth || 1;
+    const container = containerRef.current;
+    if (!container) return;
 
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDraggingDivider.current) return;
-      const deltaX = e.clientX - dividerStartX.current;
-      // 屏幕 delta 转换为图片坐标 delta
-      const deltaPos = (deltaX / scale) / containerWidth * 100;
-      setSliderPosition(Math.max(0, Math.min(100, dividerStartPos.current + deltaPos)));
+      
+      const rect = container.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const W = rect.width;
+      const center = W / 2;
+      
+      // 屏幕坐标转换为 transform div 内部坐标
+      // screenX = (localX - center) * scale + center + translateX
+      // localX = (screenX - center - translateX) / scale + center
+      const localX = (mouseX - center - translateX) / scale + center;
+      const percentage = (localX / W) * 100;
+      
+      setSliderPosition(Math.max(0, Math.min(100, percentage)));
     };
 
     const handleMouseUp = () => {
