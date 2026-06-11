@@ -21,9 +21,14 @@ export function Review() {
   const [translateX, setTranslateX] = useState(0);
   const [translateY, setTranslateY] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
-  const isDragging = useRef(false);
+  const isDraggingImage = useRef(false);
   const lastMouse = useRef({ x: 0, y: 0 });
   const spacePressed = useRef(false);
+
+  // 分隔线拖拽状态
+  const isDraggingDivider = useRef(false);
+  const dividerStartX = useRef(0);
+  const dividerStartPos = useRef(50);
 
   useEffect(() => {
     if (taskId) {
@@ -95,7 +100,7 @@ export function Review() {
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
         spacePressed.current = false;
-        isDragging.current = false;
+        isDraggingImage.current = false;
       }
     };
 
@@ -121,13 +126,32 @@ export function Review() {
     }
   };
 
-  // 对比条移动（仅在未按空格时）
-  const handleSliderMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (spacePressed.current) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const percentage = (x / rect.width) * 100;
-    setSliderPosition(Math.max(0, Math.min(100, percentage)));
+  // 分隔线拖拽 - 使用 delta 移动，转换为图片坐标
+  const handleDividerDragStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    isDraggingDivider.current = true;
+    dividerStartX.current = e.clientX;
+    dividerStartPos.current = sliderPosition;
+
+    const containerWidth = containerRef.current?.clientWidth || 1;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingDivider.current) return;
+      const deltaX = e.clientX - dividerStartX.current;
+      // 屏幕 delta 转换为图片坐标 delta
+      const deltaPos = (deltaX / scale) / containerWidth * 100;
+      setSliderPosition(Math.max(0, Math.min(100, dividerStartPos.current + deltaPos)));
+    };
+
+    const handleMouseUp = () => {
+      isDraggingDivider.current = false;
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
   };
 
   // 鼠标滚轮缩放
@@ -137,16 +161,16 @@ export function Review() {
     setScale(prev => Math.max(0.5, Math.min(5, prev * delta)));
   }, []);
 
-  // 鼠标按下：空格+拖拽=平移，否则=对比条
+  // 鼠标按下：空格+拖拽=平移
   const handleMouseDown = (e: React.MouseEvent) => {
     if (spacePressed.current && scale > 1) {
-      isDragging.current = true;
+      isDraggingImage.current = true;
       lastMouse.current = { x: e.clientX, y: e.clientY };
     }
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (isDragging.current) {
+    if (isDraggingImage.current) {
       const dx = e.clientX - lastMouse.current.x;
       const dy = e.clientY - lastMouse.current.y;
       lastMouse.current = { x: e.clientX, y: e.clientY };
@@ -156,7 +180,7 @@ export function Review() {
   };
 
   const handleMouseUp = () => {
-    isDragging.current = false;
+    isDraggingImage.current = false;
   };
 
   const resetZoom = () => {
@@ -260,66 +284,46 @@ export function Review() {
           <Card className="flex-1 flex flex-col">
             <CardContent className="p-4 flex-1 flex flex-col">
               {currentResult.output_url ? (
-                <div className="relative flex-1 min-h-[50vh]">
-                  {/* 图片容器 */}
-                  <div
-                    ref={containerRef}
-                    className={`absolute inset-0 bg-black rounded-lg overflow-hidden ${scale > 1 ? (spacePressed.current ? 'cursor-grab' : 'cursor-crosshair') : 'cursor-default'}`}
-                    onWheel={handleWheel}
-                    onMouseDown={handleMouseDown}
-                    onMouseMove={handleMouseMove}
-                    onMouseUp={handleMouseUp}
-                    onMouseLeave={handleMouseUp}
-                    onContextMenu={(e) => e.preventDefault()}
-                  >
-                    {/* 缩放层 - 只包含图片 */}
+                <div
+                  ref={containerRef}
+                  className="relative flex-1 min-h-[60vh] bg-black rounded-lg overflow-hidden"
+                  onWheel={handleWheel}
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseUp}
+                  onContextMenu={(e) => e.preventDefault()}
+                >
+                  {currentResult.status === 'success' ? (
+                    /* 对比模式：两个容器 + 分隔线 */
                     <div
-                      className="absolute inset-0"
+                      className="absolute inset-0 flex"
                       style={{
                         transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
                         transformOrigin: 'center center',
-                        transition: isDragging.current ? 'none' : 'transform 0.15s ease-out',
+                        transition: isDraggingImage.current || isDraggingDivider.current ? 'none' : 'transform 0.15s ease-out',
                       }}
                     >
-                      {currentResult.status === 'success' ? (
-                        <>
-                          <img
-                            src={filesApi.getImageUrl(originalPath)}
-                            alt="Original"
-                            className="absolute inset-0 w-full h-full object-contain"
-                            style={{ clipPath: showSlider ? `inset(0 ${100 - sliderPosition}% 0 0)` : undefined }}
-                            draggable={false}
-                          />
-                          <img
-                            src={filesApi.getImageUrl(currentResult.output_path || '')}
-                            alt="Processed"
-                            className="absolute inset-0 w-full h-full object-contain"
-                            style={{ clipPath: showSlider ? `inset(0 0 0 ${sliderPosition}%)` : undefined }}
-                            draggable={false}
-                          />
-                        </>
-                      ) : (
-                        <>
-                          <img
-                            src={filesApi.getImageUrl(currentResult.output_path || '')}
-                            alt={currentResult.filename}
-                            className="w-full h-full object-contain"
-                            draggable={false}
-                          />
-                        </>
-                      )}
-                    </div>
-
-                    {/* 对比条 - 在缩放层外，固定位置 */}
-                    {showSlider && currentResult.status === 'success' && (
+                      {/* 左侧 - 原图 */}
                       <div
-                        className="absolute inset-0 cursor-col-resize z-10"
-                        onClick={handleSliderMove}
-                        onMouseMove={(e) => e.buttons === 1 && handleSliderMove(e)}
+                        className="h-full overflow-hidden flex-shrink-0 relative"
+                        style={{ width: showSlider ? `${sliderPosition}%` : '50%' }}
                       >
+                        <img
+                          src={filesApi.getImageUrl(originalPath)}
+                          alt="Original"
+                          className="absolute inset-0 w-full h-full object-contain"
+                          style={{ width: containerRef.current?.clientWidth || '100%' }}
+                          draggable={false}
+                        />
+                        <div className="absolute top-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none">原图</div>
+                      </div>
+
+                      {/* 分隔线 - 可拖拽 */}
+                      {showSlider && (
                         <div
-                          className="absolute top-0 bottom-0 w-0.5 bg-white/80 shadow-lg pointer-events-none"
-                          style={{ left: `${sliderPosition}%` }}
+                          className="w-1 bg-white cursor-col-resize flex-shrink-0 relative z-10 hover:w-1.5 transition-all"
+                          onMouseDown={handleDividerDragStart}
                         >
                           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center pointer-events-none">
                             <div className="flex gap-0.5">
@@ -328,40 +332,58 @@ export function Review() {
                             </div>
                           </div>
                         </div>
+                      )}
+
+                      {/* 右侧 - 处理图 */}
+                      <div className="h-full overflow-hidden flex-1 relative">
+                        <img
+                          src={filesApi.getImageUrl(currentResult.output_path || '')}
+                          alt="Processed"
+                          className="absolute inset-0 w-full h-full object-contain"
+                          style={{ width: containerRef.current?.clientWidth || '100%' }}
+                          draggable={false}
+                        />
+                        <div className="absolute top-4 right-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none">处理后</div>
                       </div>
-                    )}
-
-                    {/* 固定标签 - 不跟随缩放 */}
-                    {showSlider && currentResult.status === 'success' && (
-                      <>
-                        <div className="absolute top-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none z-20">原图</div>
-                        <div className="absolute top-4 right-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none z-20">处理后</div>
-                      </>
-                    )}
-
-                    {currentResult.status !== 'success' && (
-                      <div className="absolute top-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none z-20">
+                    </div>
+                  ) : (
+                    /* 非对比模式：单图 */
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
+                        transformOrigin: 'center center',
+                        transition: isDraggingImage.current ? 'none' : 'transform 0.15s ease-out',
+                      }}
+                    >
+                      <img
+                        src={filesApi.getImageUrl(currentResult.output_path || '')}
+                        alt={currentResult.filename}
+                        className="w-full h-full object-contain"
+                        draggable={false}
+                      />
+                      <div className="absolute top-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none">
                         {currentResult.status === 'no_target' ? '未匹配到目标' : '处理失败'}
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                    {/* 缩放指示器 */}
-                    {scale > 1 && (
-                      <div className="absolute bottom-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm z-20">
-                        {Math.round(scale * 100)}%
-                      </div>
-                    )}
+                  {/* 缩放指示器 */}
+                  {scale > 1 && (
+                    <div className="absolute bottom-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm z-20">
+                      {Math.round(scale * 100)}%
+                    </div>
+                  )}
 
-                    {/* 操作提示 */}
-                    {scale > 1 && (
-                      <div className="absolute bottom-4 right-4 px-2 py-1 rounded bg-black/60 text-white text-xs z-20">
-                        按住空格拖拽平移
-                      </div>
-                    )}
-                  </div>
+                  {/* 操作提示 */}
+                  {scale > 1 && (
+                    <div className="absolute bottom-4 right-4 px-2 py-1 rounded bg-black/60 text-white text-xs z-20">
+                      按住空格拖拽平移
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="flex-1 min-h-[400px] bg-muted rounded-lg flex items-center justify-center">
+                <div className="flex-1 min-h-[60vh] bg-muted rounded-lg flex items-center justify-center">
                   <div className="text-center">
                     <AlertTriangle className="w-12 h-12 mx-auto mb-2 text-muted-foreground" />
                     <p className="text-muted-foreground">{currentResult.error_message || '无法加载图片'}</p>
