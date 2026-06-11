@@ -160,7 +160,9 @@ export function BatchProcess() {
         useDirFiles ? selectedDirFiles : undefined
       );
       addToast('任务已创建，开始处理', 'success');
-      resetCurrentTaskConfig();
+      // 只清空文件选择，保留路径和参数设置
+      setCurrentTaskConfig({ fileIds: [], name: '' });
+      clearUploadedFiles();
       navigate(`/report/${task.id}`);
     } catch (error) {
       addToast('创建任务失败', 'error');
