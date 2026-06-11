@@ -118,13 +118,17 @@ export const filesApi = {
   },
 
   // 应用设置
-  getSettings: async (): Promise<{ work_dir: string }> => {
+  getSettings: async (): Promise<{ work_dir: string; enable_optimization: boolean }> => {
     const { data } = await api.get('/files/settings');
     return data;
   },
 
-  updateSettings: async (workDir: string): Promise<{ success: boolean; work_dir: string }> => {
-    const { data } = await api.post('/files/settings', { work_dir: workDir });
+  updateSettings: async (workDir: string, enableOptimization?: boolean): Promise<{ success: boolean; work_dir: string; enable_optimization: boolean }> => {
+    const body: Record<string, unknown> = { work_dir: workDir };
+    if (enableOptimization !== undefined) {
+      body.enable_optimization = enableOptimization;
+    }
+    const { data } = await api.post('/files/settings', body);
     return data;
   },
 

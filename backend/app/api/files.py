@@ -227,23 +227,29 @@ async def get_app_settings():
     saved = load_settings()
     return {
         "work_dir": saved.get("work_dir", settings.WORK_DIR),
+        "enable_optimization": saved.get("enable_optimization", settings.ENABLE_OPTIMIZATION),
     }
 
 
 @router.post("/settings")
 async def update_app_settings(body: dict):
     """更新应用设置"""
-    work_dir = body.get("work_dir", "").strip()
-    if not work_dir:
-        raise HTTPException(status_code=400, detail="工作路径不能为空")
+    saved = load_settings()
 
-    work_dir = os.path.expanduser(work_dir) if '~' in work_dir else os.path.abspath(work_dir)
+    if "work_dir" in body:
+        work_dir = body["work_dir"].strip()
+        if not work_dir:
+            raise HTTPException(status_code=400, detail="工作路径不能为空")
+        work_dir = os.path.expanduser(work_dir) if '~' in work_dir else os.path.abspath(work_dir)
+        if not os.path.exists(work_dir):
+            os.makedirs(work_dir, exist_ok=True)
+        saved["work_dir"] = work_dir
 
-    if not os.path.exists(work_dir):
-        os.makedirs(work_dir, exist_ok=True)
+    if "enable_optimization" in body:
+        saved["enable_optimization"] = bool(body["enable_optimization"])
 
-    save_settings({"work_dir": work_dir})
-    return {"success": True, "work_dir": work_dir}
+    save_settings(saved)
+    return {"success": True, "work_dir": saved.get("work_dir"), "enable_optimization": saved.get("enable_optimization")}
 
 
 # ============ 安全的目录浏览（限制在工作路径内） ============

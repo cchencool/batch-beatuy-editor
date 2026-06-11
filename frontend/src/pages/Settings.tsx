@@ -11,6 +11,7 @@ export function Settings() {
   const navigate = useNavigate();
   const { addToast } = useAppStore();
   const [workDir, setWorkDir] = useState('');
+  const [enableOptimization, setEnableOptimization] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -22,6 +23,7 @@ export function Settings() {
     try {
       const res = await filesApi.getSettings();
       setWorkDir(res.work_dir);
+      setEnableOptimization(res.enable_optimization);
     } catch {
       addToast('加载设置失败', 'error');
     } finally {
@@ -37,8 +39,9 @@ export function Settings() {
 
     setSaving(true);
     try {
-      const res = await filesApi.updateSettings(workDir);
+      const res = await filesApi.updateSettings(workDir, enableOptimization);
       setWorkDir(res.work_dir);
+      setEnableOptimization(res.enable_optimization);
       addToast('设置已保存', 'success');
     } catch {
       addToast('保存设置失败', 'error');
@@ -86,6 +89,30 @@ export function Settings() {
             <p className="text-xs text-muted-foreground mt-1">
               输入和输出目录只能在此路径下选择，确保数据安全
             </p>
+          </div>
+
+          {/* 优化开关 */}
+          <div>
+            <div className="flex items-center justify-between py-3">
+              <div>
+                <p className="font-medium">降采样 + ROI 优化</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  开启后大图自动降采样处理，磨皮仅处理人脸区域，显著提升速度
+                </p>
+              </div>
+              <button
+                onClick={() => setEnableOptimization(!enableOptimization)}
+                className={`relative w-11 h-6 rounded-full transition-colors ${
+                  enableOptimization ? 'bg-primary' : 'bg-muted-foreground/30'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                    enableOptimization ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
           </div>
 
           <div className="flex gap-2">

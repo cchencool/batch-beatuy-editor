@@ -386,11 +386,16 @@ async def process_task_background(task_id: int):
 
             # 整个处理逻辑在线程池中执行，避免阻塞事件循环
             def _process_all():
+                from app.core.config import load_settings
+                _cfg = load_settings()
+                _enable_opt = _cfg.get("enable_optimization", True)
+
                 pipeline = BeautyPipeline(
                     persons=persons,
                     strength=task.beautify_strength,
                     edge_protection=task.edge_protection,
-                    detail_preserve=task.detail_preserve
+                    detail_preserve=task.detail_preserve,
+                    enable_optimization=_enable_opt
                 )
 
                 def process_one(file_info):

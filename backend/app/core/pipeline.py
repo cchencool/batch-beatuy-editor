@@ -48,12 +48,14 @@ class BeautyPipeline:
         persons: List,
         strength: int = 50,
         edge_protection: int = 70,
-        detail_preserve: int = 60
+        detail_preserve: int = 60,
+        enable_optimization: bool = True
     ):
         self.persons = persons
         self.strength = strength
         self.edge_protection = edge_protection
         self.detail_preserve = detail_preserve
+        self.enable_optimization = enable_optimization
 
         self.detector = FaceDetector(min_detection_confidence=0.5)
         self.recognizer = FaceRecognizer(threshold=0.4)
@@ -173,9 +175,9 @@ class BeautyPipeline:
                 return result
 
             orig_h, orig_w = image.shape[:2]
-            scale = _calc_scale(orig_w, orig_h)
+            scale = _calc_scale(orig_w, orig_h) if self.enable_optimization else 1.0
 
-            # 降采样
+            # 降采样（仅在启用优化时）
             if scale < 1.0:
                 small_img = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
             else:
@@ -225,35 +227,38 @@ class BeautyPipeline:
                 self._copy_to_output(image_path, output_dir, filename, result)
                 return result
 
-            # 步骤3：在每张人脸的 ROI 上做磨皮（避免全图处理）
+            # 步骤3：磨皮处理
             output_image = image.copy()
-            for face in target_faces:
-                bbox = face['bbox']
-                x1, y1, x2, y2 = self._get_face_roi(image, bbox)
 
-                # 裁剪人脸区域
-                face_roi = image[y1:y2, x1:x2]
+            if self.enable_optimization:
+                # 优化模式：在每张人脸的 ROI 上做磨皮（避免全图 bilateralFilter）
+                for face in target_faces:
+                    bbox = face['bbox']
+                    x1, y1, x2, y2 = self._get_face_roi(image, bbox)
 
-                # 在人脸 ROI 上生成皮肤 mask
-                roi_bbox = [bbox[0] - x1, bbox[1] - y1, bbox[2], bbox[3]]
-                roi_keypoints = {}
-                if face.get('keypoints'):
-                    for k, (kx, ky) in face['keypoints'].items():
-                        roi_keypoints[k] = (int(kx / scale) - x1, int(ky / scale) - y1)
+                    face_roi = image[y1:y2, x1:x2]
+                    roi_bbox = [bbox[0] - x1, bbox[1] - y1, bbox[2], bbox[3]]
+                    roi_keypoints = {}
+                    if face.get('keypoints'):
+                        for k, (kx, ky) in face['keypoints'].items():
+                            roi_keypoints[k] = (int(kx / scale) - x1, int(ky / scale) - y1)
 
-                skin_mask = self.segmentor.get_face_skin_mask(
-                    face_roi,
-                    roi_bbox,
-                    roi_keypoints if roi_keypoints else None,
-                    exclude_eyes=True,
-                    exclude_mouth=True
-                )
-
-                # 在 ROI 上磨皮
-                beautified_roi = self.beautifier.beautify_with_detail(face_roi, skin_mask)
-
-                # 贴回原图
-                output_image[y1:y2, x1:x2] = beautified_roi
+                    skin_mask = self.segmentor.get_face_skin_mask(
+                        face_roi, roi_bbox,
+                        roi_keypoints if roi_keypoints else None,
+                        exclude_eyes=True, exclude_mouth=True
+                    )
+                    beautified_roi = self.beautifier.beautify_with_detail(face_roi, skin_mask)
+                    output_image[y1:y2, x1:x2] = beautified_roi
+            else:
+                # 标准模式：全图磨皮（兼容原行为）
+                for face in target_faces:
+                    bbox = face['bbox']
+                    skin_mask = self.segmentor.get_face_skin_mask(
+                        image, bbox, face.get('keypoints'),
+                        exclude_eyes=True, exclude_mouth=True
+                    )
+                    output_image = self.beautifier.beautify_with_detail(output_image, skin_mask)
 
             # 步骤4：保存结果
             output_filename = f"beautified_{filename}"

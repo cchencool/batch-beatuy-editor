@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     DEFAULT_EDGE_PROTECTION: int = 70  # 默认边缘保护 0-100
     DEFAULT_DETAIL_PRESERVE: int = 60  # 默认细节保留 0-100
 
+    # 优化选项
+    ENABLE_OPTIMIZATION: bool = True  # 默认开启降采样+ROI优化
+
     class Config:
         env_file = ".env"
         case_sensitive = True
@@ -66,7 +69,7 @@ def load_settings() -> dict:
                 return json.load(f)
         except Exception:
             pass
-    return {"work_dir": settings.WORK_DIR}
+    return {"work_dir": settings.WORK_DIR, "enable_optimization": settings.ENABLE_OPTIMIZATION}
 
 
 def save_settings(data: dict):
