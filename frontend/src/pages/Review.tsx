@@ -171,6 +171,19 @@ export function Review() {
     document.addEventListener('mouseup', handleMouseUp);
   };
 
+  // 点击容器快速移动分隔线到点击处
+  const handleContainerClick = (e: React.MouseEvent) => {
+    if (!showSlider || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const W = rect.width;
+    const center = W / 2;
+    const s = scaleRef.current;
+    const tx = translateXRef.current;
+    const localX = (mouseX - center - tx) / s + center;
+    setSliderPosition(Math.max(0, Math.min(100, (localX / W) * 100)));
+  };
+
   // 鼠标滚轮缩放（以鼠标位置为中心）
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
@@ -366,6 +379,7 @@ export function Review() {
                   onMouseUp={handleMouseUp}
                   onMouseLeave={handleMouseUp}
                   onContextMenu={(e) => e.preventDefault()}
+                  onClick={handleContainerClick}
                 >
                   {currentResult.status === 'success' ? (
                     /* 对比模式：两张图叠放 + 分隔线 */
@@ -411,6 +425,7 @@ export function Review() {
                             transformOrigin: 'center center'
                           }}
                           onMouseDown={handleDividerDragStart}
+                          onClick={(e) => e.stopPropagation()}
                         >
                           <div className="w-[1.5px] h-full mx-auto bg-white shadow-lg" />
                         </div>
