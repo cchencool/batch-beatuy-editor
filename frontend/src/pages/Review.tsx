@@ -219,9 +219,10 @@ export function Review() {
     setTranslateY(newTy);
   }, []);
 
-  // 鼠标按下：空格+拖拽=平移
+  // 鼠标按下：右键/空格拖拽=平移，否则由分隔线处理
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (spacePressed.current && scale > 1) {
+    if (e.button === 2 || (spacePressed.current && scale > 1)) {
+      // 右键 或 空格+左键 → 拖拽平移
       isDraggingImage.current = true;
       lastMouse.current = { x: e.clientX, y: e.clientY };
     }
