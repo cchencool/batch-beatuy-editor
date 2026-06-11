@@ -338,7 +338,9 @@ async def generate_thumbnails(body: dict):
                 continue
 
             try:
+                from PIL import ImageOps
                 with Image.open(src_path) as img:
+                    img = ImageOps.exif_transpose(img) or img
                     img.thumbnail((200, 200))
                     img.save(thumb_path, "JPEG", quality=85)
                     count += 1
