@@ -314,7 +314,7 @@ export function Review() {
                       <img
                         src={filesApi.getImageUrl(originalPath)}
                         alt="Original"
-                        className="absolute inset-0 w-full h-full object-contain"
+                        className="absolute inset-0 w-full h-full object-contain select-none"
                         style={{
                           clipPath: showSlider ? `inset(0 ${100 - sliderPosition}% 0 0)` : undefined
                         }}
@@ -325,44 +325,29 @@ export function Review() {
                       <img
                         src={filesApi.getImageUrl(currentResult.output_path || '')}
                         alt="Processed"
-                        className="absolute inset-0 w-full h-full object-contain"
+                        className="absolute inset-0 w-full h-full object-contain select-none"
                         style={{
                           clipPath: showSlider ? `inset(0 0 0 ${sliderPosition}%)` : undefined
                         }}
                         draggable={false}
                       />
 
-                      {/* 分隔线 - 在 transform 内部，反向缩放保持大小 */}
+                      {/* 分隔线 - 加粗红色线条，同时也是拖拽手柄 */}
                       {showSlider && (
                         <div
-                          className="absolute top-0 bottom-0 w-1 bg-white cursor-col-resize z-10 hover:w-1.5 transition-all"
-                          style={{
-                            left: `${sliderPosition}%`,
-                            transform: `scaleX(${1 / scale})`,
-                            transformOrigin: 'center center'
-                          }}
+                          className="absolute top-0 bottom-0 z-10 cursor-col-resize select-none"
+                          style={{ left: `${sliderPosition}%` }}
                           onMouseDown={handleDividerDragStart}
                         >
-                          <div
-                            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center pointer-events-none"
-                            style={{
-                              transform: `translate(-50%, -50%) scale(${1 / scale})`,
-                              transformOrigin: 'center center'
-                            }}
-                          >
-                            <div className="flex gap-0.5">
-                              <ChevronLeft className="w-4 h-4" />
-                              <ChevronRight className="w-4 h-4" />
-                            </div>
-                          </div>
+                          <div className="w-[3px] h-full bg-red-500 opacity-80 hover:opacity-100 transition-opacity" />
                         </div>
                       )}
 
                       {/* 标签 */}
                       {showSlider && (
                         <>
-                          <div className="absolute top-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none">原图</div>
-                          <div className="absolute top-4 right-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none">处理后</div>
+                          <div className="absolute top-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none select-none">原图</div>
+                          <div className="absolute top-4 right-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none select-none">处理后</div>
                         </>
                       )}
                     </div>
@@ -379,10 +364,10 @@ export function Review() {
                       <img
                         src={filesApi.getImageUrl(currentResult.output_path || '')}
                         alt={currentResult.filename}
-                        className="w-full h-full object-contain"
+                        className="w-full h-full object-contain select-none"
                         draggable={false}
                       />
-                      <div className="absolute top-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none">
+                      <div className="absolute top-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none select-none">
                         {currentResult.status === 'no_target' ? '未匹配到目标' : '处理失败'}
                       </div>
                     </div>
