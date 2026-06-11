@@ -20,13 +20,18 @@ export function Review() {
   const [scale, setScale] = useState(1);
   const [translateX, setTranslateX] = useState(0);
   const [translateY, setTranslateY] = useState(0);
+  const scaleRef = useRef(1);
+  const translateXRef = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const isDraggingImage = useRef(false);
   const lastMouse = useRef({ x: 0, y: 0 });
   const spacePressed = useRef(false);
-
   // 分隔线拖拽状态
   const isDraggingDivider = useRef(false);
+
+  // 保持 ref 与 state 同步
+  useEffect(() => { scaleRef.current = scale; }, [scale]);
+  useEffect(() => { translateXRef.current = translateX; }, [translateX]);
 
   useEffect(() => {
     if (taskId) {
@@ -124,7 +129,7 @@ export function Review() {
     }
   };
 
-  // 分隔线拖拽 - 直接计算绝对位置
+  // 分隔线拖拽 - 使用 refs 避免 stale closure
   const handleDividerDragStart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -140,11 +145,11 @@ export function Review() {
       const mouseX = e.clientX - rect.left;
       const W = rect.width;
       const center = W / 2;
+      const s = scaleRef.current;
+      const tx = translateXRef.current;
       
       // 屏幕坐标转换为 transform div 内部坐标
-      // screenX = (localX - center) * scale + center + translateX
-      // localX = (screenX - center - translateX) / scale + center
-      const localX = (mouseX - center - translateX) / scale + center;
+      const localX = (mouseX - center - tx) / s + center;
       const percentage = (localX / W) * 100;
       
       setSliderPosition(Math.max(0, Math.min(100, percentage)));
@@ -332,14 +337,19 @@ export function Review() {
                         draggable={false}
                       />
 
-                      {/* 分隔线 - 加粗红色线条，同时也是拖拽手柄 */}
+                      {/* 分隔线 - 在 transform 内部，用 scaleX 反向缩放保持厚度不变 */}
                       {showSlider && (
                         <div
                           className="absolute top-0 bottom-0 z-10 cursor-col-resize select-none"
-                          style={{ left: `${sliderPosition}%` }}
+                          style={{
+                            left: `${sliderPosition}%`,
+                            width: '12px',
+                            transform: `translateX(-50%) scaleX(${1 / scale})`,
+                            transformOrigin: 'center center'
+                          }}
                           onMouseDown={handleDividerDragStart}
                         >
-                          <div className="w-[3px] h-full bg-red-500 opacity-80 hover:opacity-100 transition-opacity" />
+                          <div className="w-[1.5px] h-full mx-auto bg-white shadow-lg" />
                         </div>
                       )}
 
