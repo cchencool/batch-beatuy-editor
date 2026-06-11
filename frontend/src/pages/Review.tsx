@@ -261,7 +261,7 @@ export function Review() {
             <CardContent className="p-4 flex-1 flex flex-col">
               {currentResult.output_url ? (
                 <div className="relative flex-1 min-h-[50vh]">
-                  {/* 图片容器 - 占满可用空间 */}
+                  {/* 图片容器 */}
                   <div
                     ref={containerRef}
                     className={`absolute inset-0 bg-black rounded-lg overflow-hidden ${scale > 1 ? (spacePressed.current ? 'cursor-grab' : 'cursor-crosshair') : 'cursor-default'}`}
@@ -270,8 +270,9 @@ export function Review() {
                     onMouseMove={handleMouseMove}
                     onMouseUp={handleMouseUp}
                     onMouseLeave={handleMouseUp}
+                    onContextMenu={(e) => e.preventDefault()}
                   >
-                    {/* 缩放层 - 包含图片和对比条 */}
+                    {/* 缩放层 - 只包含图片 */}
                     <div
                       className="absolute inset-0"
                       style={{
@@ -287,12 +288,14 @@ export function Review() {
                             alt="Original"
                             className="absolute inset-0 w-full h-full object-contain"
                             style={{ clipPath: showSlider ? `inset(0 ${100 - sliderPosition}% 0 0)` : undefined }}
+                            draggable={false}
                           />
                           <img
                             src={filesApi.getImageUrl(currentResult.output_path || '')}
                             alt="Processed"
                             className="absolute inset-0 w-full h-full object-contain"
                             style={{ clipPath: showSlider ? `inset(0 0 0 ${sliderPosition}%)` : undefined }}
+                            draggable={false}
                           />
                         </>
                       ) : (
@@ -301,37 +304,46 @@ export function Review() {
                             src={filesApi.getImageUrl(currentResult.output_path || '')}
                             alt={currentResult.filename}
                             className="w-full h-full object-contain"
+                            draggable={false}
                           />
-                          <div className="absolute top-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm">
-                            {currentResult.status === 'no_target' ? '未匹配到目标' : '处理失败'}
-                          </div>
                         </>
                       )}
+                    </div>
 
-                      {/* 对比条 - 在缩放层内，反向缩放保持大小 */}
-                      {showSlider && currentResult.status === 'success' && (
+                    {/* 对比条 - 在缩放层外，固定位置 */}
+                    {showSlider && currentResult.status === 'success' && (
+                      <div
+                        className="absolute inset-0 cursor-col-resize z-10"
+                        onClick={handleSliderMove}
+                        onMouseMove={(e) => e.buttons === 1 && handleSliderMove(e)}
+                      >
                         <div
-                          className="absolute inset-0 cursor-col-resize z-10"
-                          onClick={handleSliderMove}
-                          onMouseMove={(e) => e.buttons === 1 && handleSliderMove(e)}
-                          style={{ transform: `scale(${1 / scale})`, transformOrigin: `${sliderPosition}% 50%` }}
+                          className="absolute top-0 bottom-0 w-0.5 bg-white/80 shadow-lg pointer-events-none"
+                          style={{ left: `${sliderPosition}%` }}
                         >
-                          <div
-                            className="absolute top-0 bottom-0 w-0.5 bg-white shadow-lg pointer-events-none"
-                            style={{ left: `${sliderPosition}%` }}
-                          >
-                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center pointer-events-none">
-                              <div className="flex gap-0.5">
-                                <ChevronLeft className="w-4 h-4" />
-                                <ChevronRight className="w-4 h-4" />
-                              </div>
+                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center pointer-events-none">
+                            <div className="flex gap-0.5">
+                              <ChevronLeft className="w-4 h-4" />
+                              <ChevronRight className="w-4 h-4" />
                             </div>
                           </div>
-                          <div className="absolute top-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none">原图</div>
-                          <div className="absolute top-4 right-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none">处理后</div>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
+
+                    {/* 固定标签 - 不跟随缩放 */}
+                    {showSlider && currentResult.status === 'success' && (
+                      <>
+                        <div className="absolute top-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none z-20">原图</div>
+                        <div className="absolute top-4 right-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none z-20">处理后</div>
+                      </>
+                    )}
+
+                    {currentResult.status !== 'success' && (
+                      <div className="absolute top-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none z-20">
+                        {currentResult.status === 'no_target' ? '未匹配到目标' : '处理失败'}
+                      </div>
+                    )}
 
                     {/* 缩放指示器 */}
                     {scale > 1 && (
