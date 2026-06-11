@@ -22,16 +22,22 @@ export function Review() {
   const [translateY, setTranslateY] = useState(0);
   const scaleRef = useRef(1);
   const translateXRef = useRef(0);
+  const translateYRef = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const isDraggingImage = useRef(false);
   const lastMouse = useRef({ x: 0, y: 0 });
   const spacePressed = useRef(false);
   // 分隔线拖拽状态
   const isDraggingDivider = useRef(false);
+  // 图片原始尺寸
+  const [imgNatural, setImgNatural] = useState({ w: 0, h: 0 });
+  const imgNaturalRef = useRef({ w: 0, h: 0 });
 
   // 保持 ref 与 state 同步
   useEffect(() => { scaleRef.current = scale; }, [scale]);
   useEffect(() => { translateXRef.current = translateX; }, [translateX]);
+  useEffect(() => { translateYRef.current = translateY; }, [translateY]);
+  useEffect(() => { imgNaturalRef.current = imgNatural; }, [imgNatural]);
 
   useEffect(() => {
     if (taskId) {
@@ -165,11 +171,39 @@ export function Review() {
     document.addEventListener('mouseup', handleMouseUp);
   };
 
-  // 鼠标滚轮缩放
+  // 鼠标滚轮缩放（以鼠标位置为中心）
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
+    const container = containerRef.current;
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const W = rect.width;
+    const H = rect.height;
+    const cx = W / 2;
+    const cy = H / 2;
+
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setScale(prev => Math.max(0.5, Math.min(5, prev * delta)));
+    const s = scaleRef.current;
+    const tx = translateXRef.current;
+    const ty = translateYRef.current;
+
+    const newScale = Math.max(0.5, Math.min(5, s * delta));
+
+    // 保持鼠标下方图片点不变：
+    // screenX = (imgX - cx) * s + cx + tx  →  imgX = (screenX - cx - tx) / s + cx
+    // 缩放后想让 imgX 仍位于 screenX：
+    // screenX = (imgX - cx) * newS + cx + newTx → newTx = screenX - cx - (imgX - cx) * newS
+    const imgX = (mouseX - cx - tx) / s + cx;
+    const imgY = (mouseY - cy - ty) / s + cy;
+    const newTx = mouseX - cx - (imgX - cx) * newScale;
+    const newTy = mouseY - cy - (imgY - cy) * newScale;
+
+    setScale(newScale);
+    setTranslateX(newTx);
+    setTranslateY(newTy);
   }, []);
 
   // 鼠标按下：空格+拖拽=平移
@@ -218,26 +252,47 @@ export function Review() {
     const padding = 100;
     minX = Math.max(0, minX - padding);
     minY = Math.max(0, minY - padding);
+    maxX = maxX + padding;
+    maxY = maxY + padding;
 
-    const imgWidth = 6000;
-    const imgHeight = 4000;
     const container = containerRef.current;
-    const containerWidth = container.clientWidth;
-    const containerHeight = container.clientHeight;
+    const cw = container.clientWidth;
+    const ch = container.clientHeight;
 
-    const faceWidth = maxX - minX + padding * 2;
-    const faceHeight = maxY - minY + padding * 2;
+    // 使用图片原始尺寸（如果没有则用容器尺寸近似）
+    const iw = imgNaturalRef.current.w || cw;
+    const ih = imgNaturalRef.current.h || ch;
 
-    const scaleX = containerWidth / (faceWidth / imgWidth * containerWidth);
-    const scaleY = containerHeight / (faceHeight / imgHeight * containerHeight);
-    const newScale = Math.min(scaleX, scaleY, 3);
+    // 人脸在图片中的中心点
+    const faceCenterImgX = (minX + maxX) / 2;
+    const faceCenterImgY = (minY + maxY) / 2;
+    const faceW = maxX - minX;
+    const faceH = maxY - minY;
 
-    const faceCenterX = (minX + maxX) / 2 / imgWidth * containerWidth;
-    const faceCenterY = (minY + maxY) / 2 / imgHeight * containerHeight;
+    // object-fit: contain 映射
+    const scale = Math.min(cw / iw, ch / ih);
+    const displayW = iw * scale;
+    const displayH = ih * scale;
+    const offsetX = (cw - displayW) / 2;
+    const offsetY = (ch - displayH) / 2;
 
-    setScale(newScale);
-    setTranslateX(containerWidth / 2 - faceCenterX * newScale);
-    setTranslateY(containerHeight / 2 - faceCenterY * newScale);
+    // 人脸在容器中的显示位置
+    const displayFx = faceCenterImgX * scale + offsetX;
+    const displayFy = faceCenterImgY * scale + offsetY;
+
+    // 目标缩放：让脸约占容器 50%
+    const targetScale = Math.min(cw / (faceW * scale) * 0.5, ch / (faceH * scale) * 0.5, 3);
+
+    // 计算 translate 让人脸居中
+    // screenPos = (displayPos - containerCenter) * targetScale + containerCenter + tx
+    // 设 screenPos = containerCenter:
+    // tx = (containerCenter - displayPos) * targetScale
+    const newTx = (cw / 2 - displayFx) * targetScale;
+    const newTy = (ch / 2 - displayFy) * targetScale;
+
+    setScale(targetScale);
+    setTranslateX(newTx);
+    setTranslateY(newTy);
   };
 
   if (loading) {
@@ -260,6 +315,13 @@ export function Review() {
   const currentResult = task.results[currentIndex];
   const originalPath = task.input_files.find(f => f.id === currentResult.file_id)?.path ||
     currentResult.output_path?.replace(/beautified_/, 'original_') || '';
+
+  const handleImgLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    if (img.naturalWidth > 0) {
+      setImgNatural({ w: img.naturalWidth, h: img.naturalHeight });
+    }
+  };
 
   return (
     <div className={`${isFullscreen ? 'fixed inset-0 z-50 bg-background flex flex-col' : 'animate-fade-in'}`}>
@@ -331,6 +393,7 @@ export function Review() {
                         src={filesApi.getImageUrl(currentResult.output_path || '')}
                         alt="Processed"
                         className="absolute inset-0 w-full h-full object-contain select-none"
+                        onLoad={handleImgLoad}
                         style={{
                           clipPath: showSlider ? `inset(0 0 0 ${sliderPosition}%)` : undefined
                         }}
