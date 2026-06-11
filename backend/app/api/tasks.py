@@ -382,6 +382,7 @@ async def process_task_background(task_id: int):
 
             # 导入核心处理模块
             from app.core.pipeline import BeautyPipeline
+            from concurrent.futures import ThreadPoolExecutor, as_completed
 
             # 整个处理逻辑在线程池中执行，避免阻塞事件循环
             def _process_all():
@@ -391,37 +392,57 @@ async def process_task_background(task_id: int):
                     edge_protection=task.edge_protection,
                     detail_preserve=task.detail_preserve
                 )
-                results = []
-                for i, file_info in enumerate(task.input_files):
+
+                def process_one(file_info):
+                    """处理单张图片（由线程池调度）"""
                     if processing_tasks[task_id]["cancel"]:
-                        break
+                        return None
                     while processing_tasks[task_id]["pause"]:
                         import time
                         time.sleep(0.5)
                         if processing_tasks[task_id]["cancel"]:
-                            break
-                    if processing_tasks[task_id]["cancel"]:
-                        break
+                            return None
                     try:
-                        result = pipeline.process_image(
+                        return pipeline.process_image(
                             file_info["path"],
                             task.output_dir
                         )
-                        results.append(result)
                     except Exception as e:
                         logger.error(f"Failed to process {file_info['filename']}: {e}")
-                        results.append({
+                        return {
                             "file_id": file_info["id"],
                             "filename": file_info["filename"],
                             "status": "failed",
                             "error_message": str(e)
-                        })
+                        }
+
+                results = []
+                files = [f for f in task.input_files]
+                batch_size = min(4, os.cpu_count() or 4)
+
+                with ThreadPoolExecutor(max_workers=batch_size) as pool:
+                    futures = {pool.submit(process_one, f): f for f in files}
+                    for future in as_completed(futures):
+                        r = future.result()
+                        if r is not None:
+                            results.append(r)
+                        # 检查取消
+                        if processing_tasks[task_id]["cancel"]:
+                            for f in futures:
+                                f.cancel()
+                            break
+
                 return results
 
             all_results = await loop.run_in_executor(None, _process_all)
 
             # 更新数据库（回到 async 上下文）
             results = all_results
+
+            # 持久化人员 embedding 缓存
+            for person in persons:
+                db.add(person)
+            await db.commit()
 
             # 检查是否被取消
             if processing_tasks.get(task_id, {}).get("cancel"):
