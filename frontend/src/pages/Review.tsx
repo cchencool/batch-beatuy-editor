@@ -295,37 +295,55 @@ export function Review() {
                   onContextMenu={(e) => e.preventDefault()}
                 >
                   {currentResult.status === 'success' ? (
-                    /* 对比模式：两个容器 + 分隔线 */
+                    /* 对比模式：两张图叠放 + 分隔线 */
                     <div
-                      className="absolute inset-0 flex"
+                      className="absolute inset-0"
                       style={{
                         transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
                         transformOrigin: 'center center',
                         transition: isDraggingImage.current || isDraggingDivider.current ? 'none' : 'transform 0.15s ease-out',
                       }}
                     >
-                      {/* 左侧 - 原图 */}
-                      <div
-                        className="h-full overflow-hidden flex-shrink-0 relative"
-                        style={{ width: showSlider ? `${sliderPosition}%` : '50%' }}
-                      >
-                        <img
-                          src={filesApi.getImageUrl(originalPath)}
-                          alt="Original"
-                          className="absolute inset-0 w-full h-full object-contain"
-                          style={{ width: containerRef.current?.clientWidth || '100%' }}
-                          draggable={false}
-                        />
-                        <div className="absolute top-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none">原图</div>
-                      </div>
+                      {/* 底层 - 原图 */}
+                      <img
+                        src={filesApi.getImageUrl(originalPath)}
+                        alt="Original"
+                        className="absolute inset-0 w-full h-full object-contain"
+                        style={{
+                          clipPath: showSlider ? `inset(0 ${100 - sliderPosition}% 0 0)` : undefined
+                        }}
+                        draggable={false}
+                      />
 
-                      {/* 分隔线 - 可拖拽 */}
+                      {/* 上层 - 处理图 */}
+                      <img
+                        src={filesApi.getImageUrl(currentResult.output_path || '')}
+                        alt="Processed"
+                        className="absolute inset-0 w-full h-full object-contain"
+                        style={{
+                          clipPath: showSlider ? `inset(0 0 0 ${sliderPosition}%)` : undefined
+                        }}
+                        draggable={false}
+                      />
+
+                      {/* 分隔线 - 在 transform 内部，反向缩放保持大小 */}
                       {showSlider && (
                         <div
-                          className="w-1 bg-white cursor-col-resize flex-shrink-0 relative z-10 hover:w-1.5 transition-all"
+                          className="absolute top-0 bottom-0 w-1 bg-white cursor-col-resize z-10 hover:w-1.5 transition-all"
+                          style={{
+                            left: `${sliderPosition}%`,
+                            transform: `scaleX(${1 / scale})`,
+                            transformOrigin: 'center center'
+                          }}
                           onMouseDown={handleDividerDragStart}
                         >
-                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center pointer-events-none">
+                          <div
+                            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center pointer-events-none"
+                            style={{
+                              transform: `translate(-50%, -50%) scale(${1 / scale})`,
+                              transformOrigin: 'center center'
+                            }}
+                          >
                             <div className="flex gap-0.5">
                               <ChevronLeft className="w-4 h-4" />
                               <ChevronRight className="w-4 h-4" />
@@ -334,17 +352,13 @@ export function Review() {
                         </div>
                       )}
 
-                      {/* 右侧 - 处理图 */}
-                      <div className="h-full overflow-hidden flex-1 relative">
-                        <img
-                          src={filesApi.getImageUrl(currentResult.output_path || '')}
-                          alt="Processed"
-                          className="absolute inset-0 w-full h-full object-contain"
-                          style={{ width: containerRef.current?.clientWidth || '100%' }}
-                          draggable={false}
-                        />
-                        <div className="absolute top-4 right-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none">处理后</div>
-                      </div>
+                      {/* 标签 */}
+                      {showSlider && (
+                        <>
+                          <div className="absolute top-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none">原图</div>
+                          <div className="absolute top-4 right-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none">处理后</div>
+                        </>
+                      )}
                     </div>
                   ) : (
                     /* 非对比模式：单图 */
