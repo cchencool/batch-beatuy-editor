@@ -21,6 +21,11 @@ npm install          # 安装依赖
 npm run dev          # Vite dev server, port 5173
 npm run build        # tsc -b && vite build（含类型检查）
 npm run lint         # ESLint
+
+# Docker 部署（项目根目录）
+docker compose up -d --build  # 构建并启动
+docker compose down           # 停止
+docker compose logs -f        # 查看日志
 ```
 
 ## 架构要点
