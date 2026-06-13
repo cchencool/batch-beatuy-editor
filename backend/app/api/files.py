@@ -256,15 +256,15 @@ async def update_app_settings(body: dict):
 
 @router.get("/work-dirs")
 async def list_work_dirs(path: str = "", root: str = ""):
-    """列出目录下的子目录（可限制在 root 内）"""
+    """列出目录下的子目录和图片文件"""
     from pydantic import BaseModel
 
     class DirListResult(BaseModel):
         current: str
         parent: str | None
         dirs: List[dict]
+        files: List[dict]
 
-    # 确定浏览根目录
     browse_root = root if root else get_work_dir()
     browse_root = os.path.expanduser(browse_root) if '~' in browse_root else os.path.abspath(browse_root)
 
@@ -274,25 +274,31 @@ async def list_work_dirs(path: str = "", root: str = ""):
         path = os.path.expanduser(path) if '~' in path else os.path.abspath(path)
 
     if not is_safe_path(browse_root, path):
-        return DirListResult(current=browse_root, parent=None, dirs=[])
+        return DirListResult(current=browse_root, parent=None, dirs=[], files=[])
 
     if not os.path.exists(path) or not os.path.isdir(path):
-        return DirListResult(current=path, parent=None, dirs=[])
+        return DirListResult(current=path, parent=None, dirs=[], files=[])
 
     parent = os.path.dirname(path)
     if not is_safe_path(browse_root, parent):
         parent = None
 
     dirs = []
+    files = []
+    allowed_ext = {'.jpg', '.jpeg', '.png', '.webp'}
     try:
         for f in sorted(os.listdir(path)):
             full_path = os.path.join(path, f)
-            if os.path.isdir(full_path) and not f.startswith('.'):
+            if f.startswith('.'):
+                continue
+            if os.path.isdir(full_path):
                 dirs.append({"name": f, "path": full_path})
+            elif os.path.isfile(full_path) and os.path.splitext(f)[1].lower() in allowed_ext:
+                files.append({"name": f, "path": full_path})
     except PermissionError:
         pass
 
-    return DirListResult(current=path, parent=parent, dirs=dirs)
+    return DirListResult(current=path, parent=parent, dirs=dirs, files=files)
 
 
 # ============ 缩略图生成 ============

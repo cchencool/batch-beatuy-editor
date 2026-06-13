@@ -21,6 +21,7 @@ export function PathSelector({ label, value, onChange, type = 'input' }: PathSel
   const [currentPath, setCurrentPath] = useState('');
   const [parentPath, setParentPath] = useState<string | null>(null);
   const [dirs, setDirs] = useState<DirItem[]>([]);
+  const [files, setFiles] = useState<DirItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [historyPaths, setHistoryPaths] = useState<string[]>([]);
   const browserRef = useRef<HTMLDivElement>(null);
@@ -47,8 +48,10 @@ export function PathSelector({ label, value, onChange, type = 'input' }: PathSel
       setCurrentPath(res.current);
       setParentPath(res.parent);
       setDirs(res.dirs);
+      setFiles(res.files);
     } catch {
       setDirs([]);
+      setFiles([]);
     } finally {
       setLoading(false);
     }
@@ -151,21 +154,30 @@ export function PathSelector({ label, value, onChange, type = 'input' }: PathSel
             </div>
           )}
 
-          {/* 目录列表 */}
+          {/* 目录列表 + 文件列表 */}
           <div className="overflow-y-auto max-h-48">
             {loading ? (
               <div className="px-3 py-6 text-center text-sm text-muted-foreground">加载中...</div>
-            ) : dirs.length === 0 ? (
-              <div className="px-3 py-6 text-center text-sm text-muted-foreground">此目录下没有子文件夹</div>
+            ) : dirs.length === 0 && files.length === 0 ? (
+              <div className="px-3 py-6 text-center text-sm text-muted-foreground">此目录下没有内容</div>
             ) : (
-              dirs.map((dir) => (
-                <button key={dir.path} onClick={() => loadDir(dir.path)}
-                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted text-left">
-                  <FolderOpen className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                  <span className="text-sm truncate">{dir.name}</span>
-                  <ChevronRight className="w-3 h-3 text-muted-foreground ml-auto flex-shrink-0" />
-                </button>
-              ))
+              <>
+                {dirs.map((dir) => (
+                  <button key={dir.path} onClick={() => loadDir(dir.path)}
+                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted text-left">
+                    <FolderOpen className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <span className="text-sm truncate">{dir.name}</span>
+                    <ChevronRight className="w-3 h-3 text-muted-foreground ml-auto flex-shrink-0" />
+                  </button>
+                ))}
+                {files.map((f) => (
+                  <div key={f.path}
+                    className="flex items-center gap-2 px-3 py-1.5 text-left text-sm text-muted-foreground">
+                    <span className="w-3 h-3 rounded-full bg-muted-foreground/20 flex-shrink-0" />
+                    <span className="truncate">{f.name}</span>
+                  </div>
+                ))}
+              </>
             )}
           </div>
         </div>

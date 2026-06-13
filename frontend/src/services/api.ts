@@ -132,7 +132,7 @@ export const filesApi = {
   },
 
   // 安全目录浏览（限制在 root 内）
-  listWorkDirs: async (path?: string, root?: string): Promise<{ current: string; parent: string | null; dirs: { name: string; path: string }[] }> => {
+  listWorkDirs: async (path?: string, root?: string): Promise<{ current: string; parent: string | null; dirs: { name: string; path: string }[]; files: { name: string; path: string }[] }> => {
     const params: Record<string, string> = {};
     if (path) params.path = path;
     if (root) params.root = root;
