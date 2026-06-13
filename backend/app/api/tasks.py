@@ -202,16 +202,13 @@ async def create_task(
     if not input_files:
         raise HTTPException(status_code=400, detail="没有有效的输入文件")
 
-    # 创建输出目录
+    # 创建输出目录（在输出路径下按时间戳创建子目录）
+    timestamp_dir = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     if task_data.output_dir:
-        output_dir = task_data.output_dir
-        os.makedirs(output_dir, exist_ok=True)
+        output_dir = os.path.join(task_data.output_dir, timestamp_dir)
     else:
-        output_dir = os.path.join(
-            settings.OUTPUTS_DIR,
-            f"{datetime.now().strftime('%Y-%m-%d')}_{task_data.name}_{datetime.now().strftime('%H-%M-%S')}"
-        )
-        os.makedirs(output_dir, exist_ok=True)
+        output_dir = os.path.join(settings.OUTPUTS_DIR, timestamp_dir)
+    os.makedirs(output_dir, exist_ok=True)
 
     # 创建任务
     task = Task(

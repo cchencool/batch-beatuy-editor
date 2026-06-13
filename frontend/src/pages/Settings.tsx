@@ -12,7 +12,7 @@ export function Settings() {
   const [enableOptimization, setEnableOptimization] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [defaults, setDefaults] = useState({ input: '', output: '' });
+  const [defaults, setDefaults] = useState({ input: '', output: '', workDir: '' });
 
   useEffect(() => {
     loadSettings();
@@ -25,7 +25,7 @@ export function Settings() {
         filesApi.getPaths(),
       ]);
       setEnableOptimization(settingsRes.enable_optimization);
-      setDefaults({ input: pathsRes.default_input, output: pathsRes.default_output });
+      setDefaults({ input: pathsRes.default_input, output: pathsRes.default_output, workDir: settingsRes.work_dir });
     } catch {
       addToast('加载设置失败', 'error');
     } finally {
@@ -76,6 +76,10 @@ export function Settings() {
         <CardContent className="space-y-6">
           {/* 默认路径展示 */}
           <div className="space-y-3 p-3 rounded-lg bg-muted/50">
+            <div>
+              <p className="text-sm text-muted-foreground">工作路径</p>
+              <p className="font-mono text-sm">{defaults.workDir}</p>
+            </div>
             <div>
               <p className="text-sm text-muted-foreground">输入目录</p>
               <p className="font-mono text-sm">{defaults.input}</p>
