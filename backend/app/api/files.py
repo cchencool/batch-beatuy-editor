@@ -319,9 +319,12 @@ async def generate_thumbnails(body: dict):
 
     dir_path = os.path.expanduser(dir_path) if '~' in dir_path else os.path.abspath(dir_path)
 
+    # 安全检查：必须在工作路径或 /input /output 内
     work_dir = get_work_dir()
-    if not is_safe_path(work_dir, dir_path):
-        raise HTTPException(status_code=400, detail="路径不在工作目录内")
+    allowed_roots = [work_dir, "/input", "/output"]
+    is_allowed = any(is_safe_path(root, dir_path) for root in allowed_roots)
+    if not is_allowed:
+        raise HTTPException(status_code=400, detail="路径不允许访问")
 
     if not os.path.exists(dir_path) or not os.path.isdir(dir_path):
         return ThumbResult(success=False, count=0, thumb_dir="")
