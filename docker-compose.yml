@@ -9,6 +9,7 @@ services:
       - beauty_data:/app/data
       - /Users/chen/Development/debug/batch-beatuy-editor/input:/input
       - /Users/chen/Development/debug/batch-beatuy-editor/output:/output
+      - /Users/chen/Development/debug/batch-beatuy-editor/workspace:/workspace
     environment:
       - TZ=Asia/Shanghai
     restart: unless-stopped
