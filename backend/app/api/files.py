@@ -255,8 +255,8 @@ async def update_app_settings(body: dict):
 # ============ 安全的目录浏览（限制在工作路径内） ============
 
 @router.get("/work-dirs")
-async def list_work_dirs(path: str = ""):
-    """列出工作路径下的子目录（安全限制）"""
+async def list_work_dirs(path: str = "", root: str = ""):
+    """列出目录下的子目录（可限制在 root 内）"""
     from pydantic import BaseModel
 
     class DirListResult(BaseModel):
@@ -264,21 +264,23 @@ async def list_work_dirs(path: str = ""):
         parent: str | None
         dirs: List[dict]
 
-    work_dir = get_work_dir()
+    # 确定浏览根目录
+    browse_root = root if root else get_work_dir()
+    browse_root = os.path.expanduser(browse_root) if '~' in browse_root else os.path.abspath(browse_root)
 
     if not path:
-        path = work_dir
+        path = browse_root
     else:
         path = os.path.expanduser(path) if '~' in path else os.path.abspath(path)
 
-    if not is_safe_path(work_dir, path):
-        return DirListResult(current=work_dir, parent=None, dirs=[])
+    if not is_safe_path(browse_root, path):
+        return DirListResult(current=browse_root, parent=None, dirs=[])
 
     if not os.path.exists(path) or not os.path.isdir(path):
         return DirListResult(current=path, parent=None, dirs=[])
 
     parent = os.path.dirname(path)
-    if not is_safe_path(work_dir, parent):
+    if not is_safe_path(browse_root, parent):
         parent = None
 
     dirs = []

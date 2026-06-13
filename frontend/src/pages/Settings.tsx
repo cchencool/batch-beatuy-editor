@@ -3,17 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { Settings as SettingsIcon, Save, ArrowLeft, FolderOpen } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
 import { filesApi } from '../services/api';
 import { useAppStore } from '../stores/useAppStore';
 
 export function Settings() {
   const navigate = useNavigate();
   const { addToast } = useAppStore();
-  const [workDir, setWorkDir] = useState('');
   const [enableOptimization, setEnableOptimization] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [defaults, setDefaults] = useState({ input: '', output: '' });
 
   useEffect(() => {
     loadSettings();
@@ -21,9 +20,12 @@ export function Settings() {
 
   const loadSettings = async () => {
     try {
-      const res = await filesApi.getSettings();
-      setWorkDir(res.work_dir);
-      setEnableOptimization(res.enable_optimization);
+      const [settingsRes, pathsRes] = await Promise.all([
+        filesApi.getSettings(),
+        filesApi.getPaths(),
+      ]);
+      setEnableOptimization(settingsRes.enable_optimization);
+      setDefaults({ input: pathsRes.default_input, output: pathsRes.default_output });
     } catch {
       addToast('加载设置失败', 'error');
     } finally {
@@ -32,16 +34,9 @@ export function Settings() {
   };
 
   const handleSave = async () => {
-    if (!workDir.trim()) {
-      addToast('工作路径不能为空', 'error');
-      return;
-    }
-
     setSaving(true);
     try {
-      const res = await filesApi.updateSettings(workDir, enableOptimization);
-      setWorkDir(res.work_dir);
-      setEnableOptimization(res.enable_optimization);
+      await filesApi.updateSettings(undefined, enableOptimization);
       addToast('设置已保存', 'success');
     } catch {
       addToast('保存设置失败', 'error');
@@ -79,16 +74,16 @@ export function Settings() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div>
-            <Input
-              label="工作路径"
-              value={workDir}
-              onChange={(e) => setWorkDir(e.target.value)}
-              placeholder="/path/to/work/directory"
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              输入和输出目录只能在此路径下选择，确保数据安全
-            </p>
+          {/* 默认路径展示 */}
+          <div className="space-y-3 p-3 rounded-lg bg-muted/50">
+            <div>
+              <p className="text-sm text-muted-foreground">输入目录</p>
+              <p className="font-mono text-sm">{defaults.input}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">输出目录</p>
+              <p className="font-mono text-sm">{defaults.output}</p>
+            </div>
           </div>
 
           {/* 优化开关 */}
@@ -106,11 +101,9 @@ export function Settings() {
                   enableOptimization ? 'bg-primary' : 'bg-muted-foreground/30'
                 }`}
               >
-                <span
-                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                    enableOptimization ? 'translate-x-5' : 'translate-x-0'
-                  }`}
-                />
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                  enableOptimization ? 'translate-x-5' : 'translate-x-0'
+                }`} />
               </button>
             </div>
           </div>

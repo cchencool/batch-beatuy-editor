@@ -28,11 +28,11 @@ class Settings(BaseSettings):
     SETTINGS_FILE: str = os.path.join(DATA_DIR, "settings.json")
 
     # 工作路径（可通过设置修改）
-    WORK_DIR: str = os.path.expanduser("~/Development/debug/batch-beatuy-editor")
+    WORK_DIR: str = "/workspace"
 
-    # 默认路径
-    DEFAULT_INPUT_DIR: str = os.path.expanduser("~/Downloads")
-    DEFAULT_OUTPUT_DIR: str = os.path.join(DATA_DIR, "outputs")
+    # 默认路径（容器内路径）
+    DEFAULT_INPUT_DIR: str = "/input"
+    DEFAULT_OUTPUT_DIR: str = "/output"
 
     # 数据库配置
     DATABASE_URL: str = "sqlite+aiosqlite:///./data/beauty.db"

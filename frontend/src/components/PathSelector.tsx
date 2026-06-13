@@ -25,6 +25,8 @@ export function PathSelector({ label, value, onChange, type = 'input' }: PathSel
   const [historyPaths, setHistoryPaths] = useState<string[]>([]);
   const browserRef = useRef<HTMLDivElement>(null);
 
+  const rootDir = type === 'input' ? '/input' : '/output';
+
   // 加载历史记录
   useEffect(() => {
     loadHistory();
@@ -37,11 +39,11 @@ export function PathSelector({ label, value, onChange, type = 'input' }: PathSel
     } catch {}
   };
 
-  // 加载目录内容（使用安全的 work-dirs API）
+  // 加载目录内容，限制在 root 内
   const loadDir = async (path?: string) => {
     setLoading(true);
     try {
-      const res = await filesApi.listWorkDirs(path);
+      const res = await filesApi.listWorkDirs(path, rootDir);
       setCurrentPath(res.current);
       setParentPath(res.parent);
       setDirs(res.dirs);
@@ -54,11 +56,10 @@ export function PathSelector({ label, value, onChange, type = 'input' }: PathSel
 
   // 打开浏览器
   const handleOpenBrowser = () => {
-    loadDir(value || undefined);
+    loadDir(value || rootDir);
     setShowBrowser(true);
   };
 
-  // 点击外部关闭
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (browserRef.current && !browserRef.current.contains(e.target as Node)) {
@@ -69,7 +70,6 @@ export function PathSelector({ label, value, onChange, type = 'input' }: PathSel
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // 选择目录并保存到历史
   const handleSelectCurrent = async () => {
     onChange(currentPath);
     setShowBrowser(false);
@@ -80,7 +80,6 @@ export function PathSelector({ label, value, onChange, type = 'input' }: PathSel
     } catch {}
   };
 
-  // 从历史中选择
   const handleSelectHistory = (path: string) => {
     onChange(path);
     setShowBrowser(false);
@@ -97,14 +96,10 @@ export function PathSelector({ label, value, onChange, type = 'input' }: PathSel
             label={label}
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            placeholder="选择目录..."
+            placeholder={`选择${type === 'input' ? '输入' : '输出'}目录...`}
           />
         </div>
-        <Button
-          variant="outline"
-          className="mt-6"
-          onClick={handleOpenBrowser}
-        >
+        <Button variant="outline" className="mt-6" onClick={handleOpenBrowser}>
           <FolderOpen className="w-4 h-4" />
         </Button>
       </div>
@@ -114,30 +109,19 @@ export function PathSelector({ label, value, onChange, type = 'input' }: PathSel
           {/* 面包屑导航 */}
           <div className="flex items-center gap-1 px-3 py-2 border-b bg-muted/50 text-sm overflow-x-auto">
             {parentPath !== null && (
-              <button
-                onClick={() => loadDir(parentPath)}
-                className="p-1 hover:bg-muted rounded flex-shrink-0"
-              >
+              <button onClick={() => loadDir(parentPath)} className="p-1 hover:bg-muted rounded flex-shrink-0">
                 <ArrowLeft className="w-3.5 h-3.5" />
               </button>
             )}
-            <button
-              onClick={() => loadDir()}
-              className="hover:text-primary flex-shrink-0 px-1"
-            >
-              工作目录
-            </button>
+            <span className="text-xs font-medium text-muted-foreground flex-shrink-0 mr-1">
+              {type === 'input' ? '输入' : '输出'}目录
+            </span>
             {pathParts.map((part, i) => {
               const fullPath = '/' + pathParts.slice(0, i + 1).join('/');
               return (
                 <span key={i} className="flex items-center flex-shrink-0">
                   <ChevronRight className="w-3 h-3 text-muted-foreground" />
-                  <button
-                    onClick={() => loadDir(fullPath)}
-                    className="hover:text-primary px-1"
-                  >
-                    {part}
-                  </button>
+                  <button onClick={() => loadDir(fullPath)} className="hover:text-primary px-1">{part}</button>
                 </span>
               );
             })}
@@ -147,8 +131,7 @@ export function PathSelector({ label, value, onChange, type = 'input' }: PathSel
           <div className="flex items-center justify-between px-3 py-2 border-b">
             <span className="text-xs text-muted-foreground truncate max-w-[200px]">{currentPath}</span>
             <Button size="sm" onClick={handleSelectCurrent}>
-              <Check className="w-3 h-3 mr-1" />
-              选择此目录
+              <Check className="w-3 h-3 mr-1" />选择此目录
             </Button>
           </div>
 
@@ -156,15 +139,11 @@ export function PathSelector({ label, value, onChange, type = 'input' }: PathSel
           {historyPaths.length > 0 && (
             <div className="border-b">
               <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground flex items-center gap-1">
-                <History className="w-3 h-3" />
-                最近使用
+                <History className="w-3 h-3" />最近使用
               </div>
               {historyPaths.slice(0, 5).map((path) => (
-                <button
-                  key={path}
-                  onClick={() => handleSelectHistory(path)}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-muted text-left"
-                >
+                <button key={path} onClick={() => handleSelectHistory(path)}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-muted text-left">
                   <FolderOpen className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                   <span className="text-xs truncate">{path}</span>
                 </button>
@@ -180,11 +159,8 @@ export function PathSelector({ label, value, onChange, type = 'input' }: PathSel
               <div className="px-3 py-6 text-center text-sm text-muted-foreground">此目录下没有子文件夹</div>
             ) : (
               dirs.map((dir) => (
-                <button
-                  key={dir.path}
-                  onClick={() => loadDir(dir.path)}
-                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted text-left"
-                >
+                <button key={dir.path} onClick={() => loadDir(dir.path)}
+                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted text-left">
                   <FolderOpen className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                   <span className="text-sm truncate">{dir.name}</span>
                   <ChevronRight className="w-3 h-3 text-muted-foreground ml-auto flex-shrink-0" />

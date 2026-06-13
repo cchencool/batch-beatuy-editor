@@ -7,7 +7,8 @@ services:
       - "8000:8000"
     volumes:
       - beauty_data:/app/data
-      - /Users/chen/Development/debug/batch-beatuy-editor:/Users/chen/Development/debug/batch-beatuy-editor
+      - /Users/chen/Development/debug/batch-beatuy-editor/input:/input
+      - /Users/chen/Development/debug/batch-beatuy-editor/output:/output
     environment:
       - TZ=Asia/Shanghai
     restart: unless-stopped

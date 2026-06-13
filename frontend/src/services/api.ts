@@ -123,18 +123,19 @@ export const filesApi = {
     return data;
   },
 
-  updateSettings: async (workDir: string, enableOptimization?: boolean): Promise<{ success: boolean; work_dir: string; enable_optimization: boolean }> => {
-    const body: Record<string, unknown> = { work_dir: workDir };
-    if (enableOptimization !== undefined) {
-      body.enable_optimization = enableOptimization;
-    }
+  updateSettings: async (workDir?: string, enableOptimization?: boolean): Promise<{ success: boolean; work_dir: string; enable_optimization: boolean }> => {
+    const body: Record<string, unknown> = {};
+    if (workDir !== undefined) body.work_dir = workDir;
+    if (enableOptimization !== undefined) body.enable_optimization = enableOptimization;
     const { data } = await api.post('/files/settings', body);
     return data;
   },
 
-  // 安全目录浏览（限制在工作路径内）
-  listWorkDirs: async (path?: string): Promise<{ current: string; parent: string | null; dirs: { name: string; path: string }[] }> => {
-    const params = path ? { path } : {};
+  // 安全目录浏览（限制在 root 内）
+  listWorkDirs: async (path?: string, root?: string): Promise<{ current: string; parent: string | null; dirs: { name: string; path: string }[] }> => {
+    const params: Record<string, string> = {};
+    if (path) params.path = path;
+    if (root) params.root = root;
     const { data } = await api.get('/files/work-dirs', { params });
     return data;
   },
