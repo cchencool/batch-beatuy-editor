@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, X, Play, RotateCcw, User, Settings2, FolderOpen, Check } from 'lucide-react';
+import { Upload, X, Play, RotateCcw, User, Settings2, FolderOpen, Check, AlertTriangle } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Slider } from '../components/ui/Slider';
 import { PathSelector } from '../components/PathSelector';
 import { useAppStore } from '../stores/useAppStore';
-import { filesApi, tasksApi, personsApi } from '../services/api';
+import { filesApi, tasksApi, personsApi, healthApi } from '../services/api';
 import type { FileInfo } from '../types';
 
 interface DirFile {
@@ -20,14 +21,34 @@ interface DirFile {
 
 export function BatchProcess() {
   const navigate = useNavigate();
-  const { persons, setPersons, uploadedFiles, addUploadedFiles, clearUploadedFiles, currentTaskConfig, setCurrentTaskConfig, resetCurrentTaskConfig, addToast } = useAppStore();
+  const { persons, setPersons, uploadedFiles, addUploadedFiles, removeUploadedFile, clearUploadedFiles, currentTaskConfig, setCurrentTaskConfig, resetCurrentTaskConfig, addToast } = useAppStore();
   const [processing, setProcessing] = useState(false);
   const [dirFiles, setDirFiles] = useState<DirFile[]>([]);
   const [selectedDirFiles, setSelectedDirFiles] = useState<string[]>([]);
   const [loadingDir, setLoadingDir] = useState(false);
+  const [modelWarning, setModelWarning] = useState<string | null>(null);
   const [gridCols, setGridCols] = useState(() => parseInt(localStorage.getItem('beauty-grid-cols') || '6'));
   const [gridHeight, setGridHeight] = useState(() => parseInt(localStorage.getItem('beauty-grid-height') || '320'));
   const resizeRef = useRef({ startY: 0, startHeight: 0, isResizing: false });
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  // 文件网格虚拟滚动（大目录时只渲染可视行）
+  const rowCount = Math.ceil(dirFiles.length / gridCols);
+  const rowVirtualizer = useVirtualizer({
+    count: rowCount,
+    getScrollElement: () => gridRef.current,
+    estimateSize: () => 140,
+    overscan: 4,
+  });
+
+  // 检查人脸识别模型状态，不可用时给出显式警告
+  useEffect(() => {
+    healthApi.check().then(res => {
+      if (!res.face_model.available && res.face_model.error) {
+        setModelWarning(res.face_model.error);
+      }
+    }).catch(() => {});
+  }, []);
 
   const saveGridCols = (cols: number) => {
     setGridCols(cols);
@@ -123,9 +144,7 @@ export function BatchProcess() {
   const handleRemoveFile = async (fileId: string) => {
     try {
       await filesApi.delete(fileId);
-      clearUploadedFiles();
-      const res = await filesApi.list();
-      addUploadedFiles(res.files);
+      removeUploadedFile(fileId);
       setCurrentTaskConfig({
         fileIds: currentTaskConfig.fileIds.filter((id) => id !== fileId),
       });
@@ -196,6 +215,13 @@ export function BatchProcess() {
         <p className="text-muted-foreground">配置并执行批量美颜处理</p>
       </div>
 
+      {modelWarning && (
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-700 p-3 text-sm text-yellow-800 dark:text-yellow-300">
+          <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          <span>人脸识别模型不可用，所有图片将无法匹配目标人员。{modelWarning}</span>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Panel */}
         <div className="lg:col-span-2 space-y-6">
@@ -265,44 +291,69 @@ export function BatchProcess() {
                       </div>
                     </div>
                     <div
-                      className="grid gap-2 overflow-y-auto"
-                      style={{
-                        gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`,
-                        maxHeight: `${gridHeight}px`,
-                      }}
+                      ref={gridRef}
+                      className="overflow-y-auto"
+                      style={{ maxHeight: `${gridHeight}px` }}
                     >
-                      {dirFiles.map((file) => {
-                        const isSelected = selectedDirFiles.includes(file.path);
-                        const thumbUrl = filesApi.getThumbUrl(file.path);
-                        return (
-                          <button
-                            key={file.path}
-                            onClick={() => toggleDirFile(file.path)}
-                            className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
-                              isSelected
-                                ? 'border-primary ring-2 ring-primary/20'
-                                : 'border-transparent hover:border-muted-foreground/30'
-                            }`}
-                          >
-                            <img
-                              src={thumbUrl}
-                              alt={file.name}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).style.display = 'none';
+                      <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}>
+                        {rowVirtualizer.getVirtualItems().map((vRow) => {
+                          const start = vRow.index * gridCols;
+                          const rowFiles = dirFiles.slice(start, start + gridCols);
+                          return (
+                            <div
+                              key={vRow.key}
+                              ref={rowVirtualizer.measureElement}
+                              data-index={vRow.index}
+                              style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                width: '100%',
+                                transform: `translateY(${vRow.start}px)`,
                               }}
-                            />
-                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-1">
-                              <p className="text-[10px] text-white truncate">{file.name}</p>
-                            </div>
-                            {isSelected && (
-                              <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
-                                <Check className="w-3 h-3 text-primary-foreground" />
+                            >
+                              <div
+                                className="grid gap-2 pb-2"
+                                style={{ gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` }}
+                              >
+                                {rowFiles.map((file) => {
+                                  const isSelected = selectedDirFiles.includes(file.path);
+                                  const thumbUrl = filesApi.getThumbUrl(file.path);
+                                  return (
+                                    <button
+                                      key={file.path}
+                                      onClick={() => toggleDirFile(file.path)}
+                                      className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
+                                        isSelected
+                                          ? 'border-primary ring-2 ring-primary/20'
+                                          : 'border-transparent hover:border-muted-foreground/30'
+                                      }`}
+                                    >
+                                      <img
+                                        src={thumbUrl}
+                                        alt={file.name}
+                                        loading="lazy"
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                          (e.target as HTMLImageElement).style.display = 'none';
+                                        }}
+                                      />
+                                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-1">
+                                        <p className="text-[10px] text-white truncate">{file.name}</p>
+                                      </div>
+                                      {isSelected && (
+                                        <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                                          <Check className="w-3 h-3 text-primary-foreground" />
+                                        </div>
+                                      )}
+                                    </button>
+                                  );
+                                })}
                               </div>
-                            )}
-                          </button>
-                        );
-                      })}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                     {/* 拖拽调整高度手柄 */}
                     <div
@@ -499,7 +550,7 @@ function FileThumbnail({ file, onRemove }: { file: FileInfo; onRemove: () => voi
   const thumbnailUrl = file.thumbnail_url || file.original_url || `/static/uploads/${file.id}${file.extension}`;
   return (
     <div className="relative aspect-square rounded-lg overflow-hidden group bg-muted">
-      <img src={thumbnailUrl} alt={file.filename} className="w-full h-full object-cover" />
+      <img src={thumbnailUrl} alt={file.filename} loading="lazy" className="w-full h-full object-cover" />
       <button onClick={onRemove} className="absolute top-1 right-1 p-1 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity">
         <X className="w-3 h-3" />
       </button>

@@ -104,6 +104,8 @@ class ImageResult(BaseModel):
     targets_matched: int = 0
     match_distance: Optional[float] = None
     face_bboxes: Optional[List[List[int]]] = None
+    image_width: Optional[int] = None  # 原图宽度（用于前端人脸定位）
+    image_height: Optional[int] = None  # 原图高度
     output_path: Optional[str] = None
     output_url: Optional[str] = None
     thumbnail_path: Optional[str] = None
@@ -150,9 +152,32 @@ class TaskResponse(BaseModel):
         from_attributes = True
 
 
+class TaskListItem(BaseModel):
+    """任务列表项（精简版，不含 results，避免列表接口返回大量数据）"""
+    id: int
+    name: str
+    status: TaskStatus
+    target_person_ids: List[int]
+    beautify_strength: int
+    edge_protection: int
+    detail_preserve: int
+    total_count: int
+    processed_count: int
+    success_count: int
+    failed_count: int
+    no_target_count: int
+    started_at: Optional[datetime]
+    completed_at: Optional[datetime]
+    created_at: datetime
+    error_message: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
 class TaskListResponse(BaseModel):
     """任务列表响应"""
-    tasks: List[TaskResponse]
+    tasks: List[TaskListItem]
     total: int
 
 

@@ -45,6 +45,8 @@ export interface ImageResult {
   targets_matched: number;
   match_distance?: number;
   face_bboxes?: number[][];
+  image_width?: number;
+  image_height?: number;
   output_path?: string;
   output_url?: string;
   thumbnail_path?: string;
@@ -100,9 +102,22 @@ export interface PersonListResponse {
   total: number;
 }
 
+// 任务列表项（精简版，后端列表接口不返回 results）
+export type TaskSummary = Omit<Task, 'results' | 'input_files'>;
+
 export interface TaskListResponse {
-  tasks: Task[];
+  tasks: TaskSummary[];
   total: number;
+}
+
+// 健康检查响应
+export interface HealthResponse {
+  status: string;
+  face_model: {
+    available: boolean;
+    loaded: boolean;
+    error?: string;
+  };
 }
 
 export interface FileUploadResponse {

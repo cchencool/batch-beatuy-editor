@@ -3,27 +3,27 @@
 """
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import List, Optional
-from datetime import datetime
 import asyncio
 import os
 import json
 import zipfile
-import uuid
+import tempfile
 
-from app.models.database import Task, Person, get_db
+from app.models.database import Task, Person, get_db, utc_now
 from app.models.schemas import (
-    TaskCreate, TaskResponse, TaskListResponse, TaskProgress,
-    ImageResult, MessageResponse, BeautifyParams
+    TaskCreate, TaskResponse, TaskListResponse, TaskListItem, TaskProgress,
+    ImageResult, MessageResponse
 )
 from app.api.files import get_file_by_id
-from app.core.config import settings
+from app.core.config import settings, is_path_allowed
 
 router = APIRouter()
 
-# 正在处理的任务
+# 正在处理的任务（内存控制标志与实时状态）
 processing_tasks = {}
 
 
@@ -52,6 +52,8 @@ def _result_to_image_result(r: dict) -> ImageResult:
         targets_matched=r.get("targets_matched", 0),
         match_distance=r.get("match_distance"),
         face_bboxes=r.get("face_bboxes"),
+        image_width=r.get("image_width"),
+        image_height=r.get("image_height"),
         output_path=r.get("output_path"),
         output_url=_path_to_url(r["output_path"]) if r.get("output_path") else None,
         thumbnail_path=r.get("thumbnail_path"),
@@ -61,28 +63,24 @@ def _result_to_image_result(r: dict) -> ImageResult:
     )
 
 
+def _parse_json_field(value, default):
+    """解析可能为JSON字符串的字段"""
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except Exception:
+            return default
+    return value if value is not None else default
+
+
 def _task_to_response(task: Task) -> TaskResponse:
     """将Task模型转换为TaskResponse"""
     results = []
-    if task.results:
-        if isinstance(task.results, str):
-            try:
-                task.results = json.loads(task.results)
-            except Exception:
-                task.results = []
-        for r in task.results:
-            if isinstance(r, dict):
-                results.append(_result_to_image_result(r))
-            else:
-                results.append(r)
-
-    # 解析 input_files
-    input_files = task.input_files or []
-    if isinstance(input_files, str):
-        try:
-            input_files = json.loads(input_files)
-        except Exception:
-            input_files = []
+    for r in _parse_json_field(task.results, []):
+        if isinstance(r, dict):
+            results.append(_result_to_image_result(r))
+        else:
+            results.append(r)
 
     return TaskResponse(
         id=task.id,
@@ -92,13 +90,35 @@ def _task_to_response(task: Task) -> TaskResponse:
         beautify_strength=task.beautify_strength,
         edge_protection=task.edge_protection,
         detail_preserve=task.detail_preserve,
-        input_files=input_files,
+        input_files=_parse_json_field(task.input_files, []),
         total_count=task.total_count,
         processed_count=task.processed_count,
         success_count=task.success_count,
         failed_count=task.failed_count,
         no_target_count=task.no_target_count,
         results=results,
+        started_at=task.started_at,
+        completed_at=task.completed_at,
+        created_at=task.created_at,
+        error_message=task.error_message,
+    )
+
+
+def _task_to_list_item(task: Task) -> TaskListItem:
+    """将Task模型转换为精简列表项（不含results）"""
+    return TaskListItem(
+        id=task.id,
+        name=task.name,
+        status=task.status,
+        target_person_ids=task.target_person_ids or [],
+        beautify_strength=task.beautify_strength,
+        edge_protection=task.edge_protection,
+        detail_preserve=task.detail_preserve,
+        total_count=task.total_count,
+        processed_count=task.processed_count,
+        success_count=task.success_count,
+        failed_count=task.failed_count,
+        no_target_count=task.no_target_count,
         started_at=task.started_at,
         completed_at=task.completed_at,
         created_at=task.created_at,
@@ -113,7 +133,7 @@ async def list_tasks(
     status: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
 ):
-    """获取任务列表"""
+    """获取任务列表（精简版，不含每张图的处理结果）"""
     query = select(Task)
 
     if status:
@@ -130,7 +150,7 @@ async def list_tasks(
     total_result = await db.execute(count_query)
     total = total_result.scalar()
 
-    return TaskListResponse(tasks=[_task_to_response(t) for t in tasks], total=total)
+    return TaskListResponse(tasks=[_task_to_list_item(t) for t in tasks], total=total)
 
 
 @router.get("/{task_id}", response_model=TaskResponse)
@@ -147,7 +167,7 @@ async def get_task(task_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/{task_id}/progress", response_model=TaskProgress)
 async def get_task_progress(task_id: int, db: AsyncSession = Depends(get_db)):
-    """获取任务进度"""
+    """获取任务进度（处理中实时更新）"""
     result = await db.execute(select(Task).where(Task.id == task_id))
     task = result.scalar_one_or_none()
 
@@ -155,6 +175,11 @@ async def get_task_progress(task_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="任务不存在")
 
     progress = (task.processed_count / task.total_count * 100) if task.total_count > 0 else 0
+
+    # 当前处理文件名保存在内存中（避免数据库加列迁移）
+    current_file = None
+    if task_id in processing_tasks:
+        current_file = processing_tasks[task_id].get("current_file")
 
     return TaskProgress(
         task_id=task.id,
@@ -164,6 +189,7 @@ async def get_task_progress(task_id: int, db: AsyncSession = Depends(get_db)):
         success_count=task.success_count,
         failed_count=task.failed_count,
         no_target_count=task.no_target_count,
+        current_file=current_file,
         progress_percent=progress
     )
 
@@ -192,6 +218,9 @@ async def create_task(
                 "path": file_info.original_path
             })
     for file_path in task_data.file_paths:
+        # 安全校验：输入文件必须位于白名单目录内
+        if not is_path_allowed(file_path):
+            raise HTTPException(status_code=400, detail=f"文件路径不在允许的目录内: {file_path}")
         if os.path.isfile(file_path):
             input_files.append({
                 "id": os.path.splitext(os.path.basename(file_path))[0],
@@ -202,7 +231,12 @@ async def create_task(
     if not input_files:
         raise HTTPException(status_code=400, detail="没有有效的输入文件")
 
+    # 自定义输出目录同样限制在白名单内
+    if task_data.output_dir and not is_path_allowed(task_data.output_dir):
+        raise HTTPException(status_code=400, detail="输出目录不在允许的目录内")
+
     # 创建输出目录（在输出路径下按时间戳创建子目录）
+    from datetime import datetime
     timestamp_dir = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
     if task_data.output_dir:
         output_dir = os.path.join(task_data.output_dir, timestamp_dir)
@@ -248,7 +282,8 @@ async def start_task(
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
 
-    if task.status == "processing":
+    # 同时检查数据库状态与内存中的处理标志，防止重复启动
+    if task.status == "processing" or task_id in processing_tasks:
         raise HTTPException(status_code=400, detail="任务正在处理中")
 
     task.status = "pending"
@@ -315,9 +350,19 @@ async def delete_task(task_id: int, db: AsyncSession = Depends(get_db)):
     return MessageResponse(success=True, message="任务已删除")
 
 
+def _create_results_zip(output_dir: str, zip_path: str):
+    """同步压缩结果目录（在线程中执行，避免阻塞事件循环）"""
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for root, dirs, files in os.walk(output_dir):
+            for file in files:
+                file_path = os.path.join(root, file)
+                arcname = os.path.relpath(file_path, output_dir)
+                zipf.write(file_path, arcname)
+
+
 @router.get("/{task_id}/download")
 async def download_results(task_id: int, db: AsyncSession = Depends(get_db)):
-    """下载处理结果（ZIP压缩包）"""
+    """下载处理结果（ZIP压缩包，异步压缩 + 用后自动清理）"""
     result = await db.execute(select(Task).where(Task.id == task_id))
     task = result.scalar_one_or_none()
 
@@ -330,20 +375,41 @@ async def download_results(task_id: int, db: AsyncSession = Depends(get_db)):
     if not task.output_dir or not os.path.exists(task.output_dir):
         raise HTTPException(status_code=404, detail="输出目录不存在")
 
-    # 创建ZIP文件
-    zip_path = os.path.join(settings.OUTPUTS_DIR, f"task_{task_id}_results.zip")
-    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        for root, dirs, files in os.walk(task.output_dir):
-            for file in files:
-                file_path = os.path.join(root, file)
-                arcname = os.path.relpath(file_path, task.output_dir)
-                zipf.write(file_path, arcname)
+    # 在线程中压缩到临时文件，响应发送完毕后自动删除
+    fd, zip_path = tempfile.mkstemp(prefix=f"task_{task_id}_", suffix=".zip")
+    os.close(fd)
+    try:
+        await asyncio.to_thread(_create_results_zip, task.output_dir, zip_path)
+    except Exception:
+        os.remove(zip_path)
+        raise
 
     return FileResponse(
         zip_path,
         filename=f"task_{task_id}_results.zip",
-        media_type="application/zip"
+        media_type="application/zip",
+        background=BackgroundTask(os.remove, zip_path),
     )
+
+
+def _update_progress_sync(task_id: int, results: List[dict], current_file: str):
+    """在后台线程中增量更新任务进度（使用独立同步session）"""
+    from app.models.database import sync_session
+    try:
+        with sync_session() as session:
+            t = session.get(Task, task_id)
+            if t is None:
+                return
+            t.processed_count = len(results)
+            t.success_count = sum(1 for r in results if r.get("status") == "success")
+            t.no_target_count = sum(1 for r in results if r.get("status") == "no_target")
+            t.failed_count = sum(1 for r in results if r.get("status") == "failed")
+            session.commit()
+        if task_id in processing_tasks:
+            processing_tasks[task_id]["current_file"] = current_file
+    except Exception:
+        # 进度更新失败不影响主流程
+        pass
 
 
 async def process_task_background(task_id: int):
@@ -355,7 +421,7 @@ async def process_task_background(task_id: int):
     loop = asyncio.get_running_loop()
 
     # 初始化处理控制
-    processing_tasks[task_id] = {"pause": False, "cancel": False}
+    processing_tasks[task_id] = {"pause": False, "cancel": False, "current_file": None}
 
     try:
         async with async_session() as db:
@@ -368,14 +434,31 @@ async def process_task_background(task_id: int):
 
             # 更新状态为处理中
             task.status = "processing"
-            task.started_at = datetime.utcnow()
+            task.started_at = utc_now()
             await db.commit()
 
-            # 获取目标人员信息
+            # 提前拷贝任务参数为纯数据（后台线程不再访问ORM对象）
+            task_params = {
+                "strength": task.beautify_strength,
+                "edge_protection": task.edge_protection,
+                "detail_preserve": task.detail_preserve,
+                "output_dir": task.output_dir,
+                "input_files": list(task.input_files or []),
+            }
+
+            # 获取目标人员信息并转为纯数据字典
             persons_result = await db.execute(
                 select(Person).where(Person.id.in_(task.target_person_ids))
             )
-            persons = persons_result.scalars().all()
+            persons_data = [
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "reference_photos": p.reference_photos or [],
+                    "face_embeddings": p.face_embeddings or {},
+                }
+                for p in persons_result.scalars().all()
+            ]
 
             # 导入核心处理模块
             from app.core.pipeline import BeautyPipeline
@@ -388,10 +471,10 @@ async def process_task_background(task_id: int):
                 _enable_opt = _cfg.get("enable_optimization", True)
 
                 pipeline = BeautyPipeline(
-                    persons=persons,
-                    strength=task.beautify_strength,
-                    edge_protection=task.edge_protection,
-                    detail_preserve=task.detail_preserve,
+                    persons=persons_data,
+                    strength=task_params["strength"],
+                    edge_protection=task_params["edge_protection"],
+                    detail_preserve=task_params["detail_preserve"],
                     enable_optimization=_enable_opt
                 )
 
@@ -407,7 +490,7 @@ async def process_task_background(task_id: int):
                     try:
                         return pipeline.process_image(
                             file_info["path"],
-                            task.output_dir
+                            task_params["output_dir"]
                         )
                     except Exception as e:
                         logger.error(f"Failed to process {file_info['filename']}: {e}")
@@ -419,7 +502,7 @@ async def process_task_background(task_id: int):
                         }
 
                 results = []
-                files = [f for f in task.input_files]
+                files = [f for f in task_params["input_files"]]
                 batch_size = min(4, os.cpu_count() or 4)
 
                 with ThreadPoolExecutor(max_workers=batch_size) as pool:
@@ -428,23 +511,29 @@ async def process_task_background(task_id: int):
                         r = future.result()
                         if r is not None:
                             results.append(r)
+                            # 每完成一张即增量更新进度，前端可实时看到
+                            _update_progress_sync(
+                                task_id, results,
+                                r.get("filename", "")
+                            )
                         # 检查取消
                         if processing_tasks[task_id]["cancel"]:
                             for f in futures:
                                 f.cancel()
                             break
 
-                return results
+                return results, pipeline.updated_embeddings
 
-            all_results = await loop.run_in_executor(None, _process_all)
-
-            # 更新数据库（回到 async 上下文）
+            all_results, updated_embeddings = await loop.run_in_executor(None, _process_all)
             results = all_results
 
             # 持久化人员 embedding 缓存
-            for person in persons:
-                db.add(person)
-            await db.commit()
+            if updated_embeddings:
+                for person_id, cache in updated_embeddings.items():
+                    p = await db.get(Person, person_id)
+                    if p is not None:
+                        p.face_embeddings = cache
+                await db.commit()
 
             # 检查是否被取消
             if processing_tasks.get(task_id, {}).get("cancel"):
@@ -460,7 +549,7 @@ async def process_task_background(task_id: int):
 
             # 完成处理
             task.status = "completed"
-            task.completed_at = datetime.utcnow()
+            task.completed_at = utc_now()
 
             # 保存处理报告
             report = {

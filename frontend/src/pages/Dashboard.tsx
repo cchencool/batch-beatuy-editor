@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button';
 import { useAppStore } from '../stores/useAppStore';
 import { personsApi, tasksApi } from '../services/api';
-import type { Task } from '../types';
+import type { TaskSummary } from '../types';
 
 export function Dashboard() {
   const navigate = useNavigate();
@@ -203,7 +203,7 @@ export function Dashboard() {
   );
 }
 
-function TaskRow({ task, onClick }: { task: Task; onClick: () => void }) {
+function TaskRow({ task, onClick }: { task: TaskSummary; onClick: () => void }) {
   const [starting, setStarting] = useState(false);
   const { addToast, setTasks } = useAppStore();
 

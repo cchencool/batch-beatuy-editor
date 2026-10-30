@@ -66,28 +66,21 @@ class SkinBeautifier:
         # 转换为float32以支持精确计算
         img_float = image.astype(np.float32)
 
-        # 创建输出图像
-        output = img_float.copy()
+        # 三通道一次双边滤波（比逐通道调用更快）
+        # 双边滤波可以在平滑的同时保留边缘
+        sigma_color = threshold * 2  # 颜色空间sigma
+        sigma_space = radius * 2  # 坐标空间sigma
 
-        # 对每个通道进行处理
-        for c in range(3):
-            channel = img_float[:, :, c]
+        blurred = cv2.bilateralFilter(
+            img_float,
+            d=radius * 2 + 1,
+            sigmaColor=sigma_color,
+            sigmaSpace=sigma_space
+        )
 
-            # 使用OpenCV的双边滤波作为基础
-            # 双边滤波可以在平滑的同时保留边缘
-            sigma_color = threshold * 2  # 颜色空间sigma
-            sigma_space = radius * 2  # 坐标空间sigma
-
-            blurred = cv2.bilateralFilter(
-                channel,
-                d=radius * 2 + 1,
-                sigmaColor=sigma_color,
-                sigmaSpace=sigma_space
-            )
-
-            # 根据强度混合原图和模糊图
-            alpha = self.strength / 100
-            output[:, :, c] = channel * (1 - alpha) + blurred * alpha
+        # 根据强度混合原图和模糊图
+        alpha = self.strength / 100
+        output = img_float * (1 - alpha) + blurred * alpha
 
         # 如果有mask，只应用到mask区域
         if mask is not None:

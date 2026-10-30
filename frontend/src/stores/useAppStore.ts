@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Person, Task, FileInfo, BeautifyParams } from '../types';
+import type { Person, TaskSummary, FileInfo, BeautifyParams } from '../types';
 
 interface AppState {
   // 人员
@@ -17,11 +17,11 @@ interface AppState {
   removeUploadedFile: (id: string) => void;
   clearUploadedFiles: () => void;
 
-  // 任务
-  tasks: Task[];
-  setTasks: (tasks: Task[]) => void;
-  addTask: (task: Task) => void;
-  updateTask: (id: number, updates: Partial<Task>) => void;
+  // 任务（列表为精简数据，不含 results）
+  tasks: TaskSummary[];
+  setTasks: (tasks: TaskSummary[]) => void;
+  addTask: (task: TaskSummary) => void;
+  updateTask: (id: number, updates: Partial<TaskSummary>) => void;
 
   // 当前批量处理配置
   currentTaskConfig: {
@@ -125,7 +125,7 @@ export const useAppStore = create<AppState>()(
       // Toast
       toasts: [],
       addToast: (message, type) => {
-        const id = Date.now().toString();
+        const id = crypto.randomUUID();
         set((state) => ({
           toasts: [...state.toasts, { id, message, type }],
         }));

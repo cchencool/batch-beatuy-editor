@@ -10,7 +10,7 @@ import os
 import uuid
 import shutil
 
-from app.models.database import Person, get_db
+from app.models.database import Person, get_db, utc_now
 from app.models.schemas import (
     PersonCreate, PersonUpdate, PersonResponse,
     PersonListResponse, MessageResponse
@@ -166,7 +166,7 @@ async def update_person(
     if person_update.note is not None:
         person.note = person_update.note
 
-    person.updated_at = datetime.utcnow()
+    person.updated_at = utc_now()
     await db.commit()
     await db.refresh(person)
 
@@ -183,7 +183,7 @@ async def delete_person(person_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="人员不存在")
 
     person.is_active = False
-    person.updated_at = datetime.utcnow()
+    person.updated_at = utc_now()
     await db.commit()
 
     return MessageResponse(success=True, message=f"人员 {person.name} 已删除")
@@ -226,7 +226,7 @@ async def add_photos(
         new_paths.append(photo_path)
 
     person.reference_photos = new_paths
-    person.updated_at = datetime.utcnow()
+    person.updated_at = utc_now()
     await db.commit()
     await db.refresh(person)
 
@@ -265,7 +265,7 @@ async def delete_photo(
     elif not photos:
         person.avatar_path = None
 
-    person.updated_at = datetime.utcnow()
+    person.updated_at = utc_now()
     await db.commit()
     await db.refresh(person)
 

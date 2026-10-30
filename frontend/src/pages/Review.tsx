@@ -57,7 +57,7 @@ export function Review() {
     try {
       setLoading(true);
       const res = await tasksApi.list();
-      const completedTask = res.tasks.find(t => t.status === 'completed' && t.results.length > 0);
+      const completedTask = res.tasks.find(t => t.status === 'completed' && t.total_count > 0);
       if (completedTask) {
         navigate(`/review/${completedTask.id}`, { replace: true });
       } else {
@@ -273,9 +273,9 @@ export function Review() {
     const cw = container.clientWidth;
     const ch = container.clientHeight;
 
-    // 使用图片原始尺寸（如果没有则用容器尺寸近似）
-    const iw = imgNaturalRef.current.w || cw;
-    const ih = imgNaturalRef.current.h || ch;
+    // 使用结果中记录的原图尺寸（bbox 坐标系与原图一致，与显示图分辨率无关）
+    const iw = result.image_width || imgNaturalRef.current.w || cw;
+    const ih = result.image_height || imgNaturalRef.current.h || ch;
 
     // 人脸在图片中的中心点
     const faceCenterImgX = (minX + maxX) / 2;
@@ -329,6 +329,15 @@ export function Review() {
   const currentResult = task.results[currentIndex];
   const originalPath = task.input_files.find(f => f.id === currentResult.file_id)?.path ||
     currentResult.output_path?.replace(/beautified_/, 'original_') || '';
+
+  // 默认加载预览图（最长边2048），放大查看细节时切换原图
+  const useFullRes = scale >= 2;
+  const originalSrc = useFullRes
+    ? filesApi.getImageUrl(originalPath)
+    : filesApi.getPreviewUrl(originalPath);
+  const processedSrc = useFullRes
+    ? filesApi.getImageUrl(currentResult.output_path || '')
+    : filesApi.getPreviewUrl(currentResult.output_path || '');
 
   const handleImgLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
@@ -394,7 +403,7 @@ export function Review() {
                     >
                       {/* 底层 - 原图 */}
                       <img
-                        src={filesApi.getImageUrl(originalPath)}
+                        src={originalSrc}
                         alt="Original"
                         className="absolute inset-0 w-full h-full object-contain select-none"
                         style={{
@@ -405,7 +414,7 @@ export function Review() {
 
                       {/* 上层 - 处理图 */}
                       <img
-                        src={filesApi.getImageUrl(currentResult.output_path || '')}
+                        src={processedSrc}
                         alt="Processed"
                         className="absolute inset-0 w-full h-full object-contain select-none"
                         onLoad={handleImgLoad}
@@ -451,7 +460,7 @@ export function Review() {
                       }}
                     >
                       <img
-                        src={filesApi.getImageUrl(currentResult.output_path || '')}
+                        src={processedSrc}
                         alt={currentResult.filename}
                         className="w-full h-full object-contain select-none"
                         draggable={false}
@@ -583,6 +592,7 @@ function ThumbnailItem({ result, isActive, onClick }: { result: ImageResult; isA
           <img
             src={filesApi.getImageUrl(result.thumbnail_path || result.output_path)}
             alt={result.filename}
+            loading="lazy"
             className="w-full h-full object-cover"
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />

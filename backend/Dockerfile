@@ -15,8 +15,8 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-# 复制依赖配置并安装
-COPY pyproject.toml README.md ./
+# 复制依赖配置并安装（含锁文件保证可复现）
+COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --no-dev
 
 # 下载 InsightFace buffalo_l 模型

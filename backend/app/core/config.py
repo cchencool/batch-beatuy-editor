@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     # 应用基本信息
     APP_NAME: str = "批量美颜工具"
-    DEBUG: bool = True
+    DEBUG: bool = False
     API_PREFIX: str = "/api"
 
     # CORS配置
@@ -96,3 +96,20 @@ def is_safe_path(base_dir: str, target_path: str) -> bool:
         return target.startswith(base + os.sep) or target == base
     except Exception:
         return False
+
+
+def get_allowed_roots() -> List[str]:
+    """文件访问白名单根目录（工作路径、输入输出目录、上传与输出存储）"""
+    return [
+        get_work_dir(),
+        settings.DEFAULT_INPUT_DIR,
+        settings.DEFAULT_OUTPUT_DIR,
+        settings.UPLOADS_DIR,
+        settings.OUTPUTS_DIR,
+        settings.PERSONS_DIR,
+    ]
+
+
+def is_path_allowed(target_path: str) -> bool:
+    """检查目标路径是否位于任一白名单根目录内"""
+    return any(is_safe_path(root, target_path) for root in get_allowed_roots())

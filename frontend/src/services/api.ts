@@ -8,15 +8,27 @@ import type {
   FileInfo,
   FileUploadResponse,
   MessageResponse,
-  BeautifyParams
+  BeautifyParams,
+  HealthResponse
 } from '../types';
 
 const api = axios.create({
   baseURL: '/api',
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+// 统一错误处理：提取后端 detail 信息，便于前端展示具体原因
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const detail = error.response?.data?.detail;
+    const message = typeof detail === 'string' ? detail : error.message || '请求失败';
+    return Promise.reject(new Error(message));
+  }
+);
 
 // 人员管理 API
 export const personsApi = {
@@ -107,11 +119,6 @@ export const filesApi = {
     return data;
   },
 
-  listDirs: async (path: string): Promise<{ current: string; parent: string | null; dirs: { name: string; path: string }[] }> => {
-    const { data } = await api.get('/files/list-dirs', { params: { path } });
-    return data;
-  },
-
   scanDir: async (path: string): Promise<{ path: string; exists: boolean; is_dir: boolean; files: { id: string; name: string; path: string; size: number; extension: string }[] }> => {
     const { data } = await api.get('/files/scan', { params: { path } });
     return data;
@@ -154,6 +161,11 @@ export const filesApi = {
   // 获取原始图片
   getImageUrl: (path: string): string => {
     return `/api/files/image?path=${encodeURIComponent(path)}`;
+  },
+
+  // 获取限制最长边的预览图（大图快速加载）
+  getPreviewUrl: (path: string, maxSize = 2048): string => {
+    return `/api/files/preview?path=${encodeURIComponent(path)}&max_size=${maxSize}`;
   },
 
   savePath: async (path: string, type: 'input' | 'output'): Promise<{ success: boolean; paths: string[] }> => {
@@ -234,7 +246,16 @@ export const tasksApi = {
   download: async (id: number): Promise<Blob> => {
     const { data } = await api.get(`/tasks/${id}/download`, {
       responseType: 'blob',
+      timeout: 300000, // 大任务压缩可能较耗时
     });
+    return data;
+  },
+};
+
+// 健康检查（含人脸模型状态）
+export const healthApi = {
+  check: async (): Promise<HealthResponse> => {
+    const { data } = await api.get('/health', { baseURL: '/' });
     return data;
   },
 };

@@ -4,10 +4,15 @@
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, JSON, Text, create_engine
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 
 from app.core.config import settings
+
+
+def utc_now() -> datetime:
+    """带时区的UTC时间（序列化后前端可正确解析）"""
+    return datetime.now(timezone.utc)
 
 # 异步引擎（用于 FastAPI 请求）
 engine = create_async_engine(
@@ -15,7 +20,7 @@ engine = create_async_engine(
     echo=settings.DEBUG,
 )
 
-# 同步引擎（用于后台线程）
+# 同步引擎（用于后台线程中增量更新任务进度）
 sync_engine = create_engine(
     settings.DATABASE_URL.replace("sqlite+aiosqlite", "sqlite"),
     echo=False,
@@ -51,8 +56,8 @@ class Person(Base):
     is_active = Column(Boolean, default=True)
     process_count = Column(Integer, default=0)  # 被处理次数
     last_process_time = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
 
 class Task(Base):
@@ -87,8 +92,8 @@ class Task(Base):
     # 时间信息
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # 错误信息
     error_message = Column(Text, nullable=True)

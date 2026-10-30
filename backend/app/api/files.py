@@ -10,7 +10,9 @@ import json
 from pathlib import Path
 
 from app.models.schemas import FileInfo, FileUploadResponse, MessageResponse
-from app.core.config import settings, load_settings, save_settings, get_work_dir, is_safe_path
+from app.core.config import (
+    settings, load_settings, save_settings, get_work_dir, is_safe_path, is_path_allowed
+)
 
 router = APIRouter()
 
@@ -150,7 +152,7 @@ async def clear_all_files():
 
 @router.get("/scan")
 async def scan_directory(path: str = "/"):
-    """扫描目录中的图片文件，返回可选择的文件列表"""
+    """扫描目录中的图片文件（仅限白名单目录），返回可选择的文件列表"""
     from pydantic import BaseModel
 
     class DirScanResult(BaseModel):
@@ -166,6 +168,9 @@ async def scan_directory(path: str = "/"):
 
     if not os.path.isdir(path):
         return DirScanResult(path=path, exists=True, is_dir=False, files=[])
+
+    if not is_path_allowed(path):
+        raise HTTPException(status_code=403, detail="路径不在允许的目录内")
 
     allowed_ext = {'.jpg', '.jpeg', '.png', '.webp'}
     files = []
@@ -185,38 +190,6 @@ async def scan_directory(path: str = "/"):
         pass
 
     return DirScanResult(path=path, exists=True, is_dir=True, files=files)
-
-
-@router.get("/list-dirs")
-async def list_directories(path: str = "/"):
-    """列出目录下的子目录，支持向上导航"""
-    from pydantic import BaseModel
-
-    class DirListResult(BaseModel):
-        current: str
-        parent: str | None
-        dirs: List[dict]
-
-    path = os.path.expanduser(path) if '~' in path else os.path.abspath(path)
-
-    if not os.path.exists(path) or not os.path.isdir(path):
-        return DirListResult(current=path, parent=None, dirs=[])
-
-    parent = os.path.dirname(path) if path != "/" else None
-
-    dirs = []
-    try:
-        for f in sorted(os.listdir(path)):
-            full_path = os.path.join(path, f)
-            if os.path.isdir(full_path) and not f.startswith('.'):
-                dirs.append({
-                    "name": f,
-                    "path": full_path,
-                })
-    except PermissionError:
-        pass
-
-    return DirListResult(current=path, parent=parent, dirs=dirs)
 
 
 # ============ 应用设置 ============
@@ -371,27 +344,27 @@ async def generate_thumbnails(body: dict):
 
 @router.get("/thumb")
 async def get_thumbnail(path: str):
-    """获取图片缩略图（如果不存在则返回原图）"""
+    """获取图片缩略图（按源目录精确定位，不存在则返回原图）"""
     from fastapi.responses import FileResponse
 
     path = os.path.expanduser(path) if '~' in path else os.path.abspath(path)
 
+    if not is_path_allowed(path):
+        raise HTTPException(status_code=403, detail="路径不在允许的目录内")
+
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="文件不存在")
 
-    # 在工作路径的 thumbnails 目录中查找缩略图
+    # 缩略图按 源目录名/文件名_thumb.jpg 组织，精确定位避免同名错配
     work_dir = get_work_dir()
-    thumb_dir = os.path.join(work_dir, "thumbnails")
+    source_dir_name = os.path.basename(os.path.dirname(path))
+    name_without_ext = os.path.splitext(os.path.basename(path))[0]
+    thumb_path = os.path.join(
+        work_dir, "thumbnails", source_dir_name, f"{name_without_ext}_thumb.jpg"
+    )
 
-    if os.path.isdir(thumb_dir):
-        filename = os.path.basename(path)
-        name_without_ext = os.path.splitext(filename)[0]
-        thumb_name = f"{name_without_ext}_thumb.jpg"
-
-        for sub in os.listdir(thumb_dir):
-            thumb_path = os.path.join(thumb_dir, sub, thumb_name)
-            if os.path.exists(thumb_path):
-                return FileResponse(thumb_path)
+    if os.path.exists(thumb_path):
+        return FileResponse(thumb_path)
 
     # 没有缩略图，返回原图
     return FileResponse(path)
@@ -399,15 +372,59 @@ async def get_thumbnail(path: str):
 
 @router.get("/image")
 async def get_image(path: str):
-    """获取原始图片（支持任意路径）"""
+    """获取原始图片（仅限白名单目录）"""
     from fastapi.responses import FileResponse
 
     path = os.path.expanduser(path) if '~' in path else os.path.abspath(path)
+
+    if not is_path_allowed(path):
+        raise HTTPException(status_code=403, detail="路径不在允许的目录内")
 
     if not os.path.exists(path) or not os.path.isfile(path):
         raise HTTPException(status_code=404, detail="文件不存在")
 
     return FileResponse(path)
+
+
+@router.get("/preview")
+async def get_preview(path: str, max_size: int = 2048):
+    """获取限制最长边的预览图（缓存到工作目录，用于前端快速加载大图）"""
+    import hashlib
+    from fastapi.responses import FileResponse
+
+    path = os.path.expanduser(path) if '~' in path else os.path.abspath(path)
+
+    if not is_path_allowed(path):
+        raise HTTPException(status_code=403, detail="路径不在允许的目录内")
+
+    if not os.path.exists(path) or not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    max_size = max(256, min(max_size, 4096))
+    work_dir = get_work_dir()
+    preview_dir = os.path.join(work_dir, "previews")
+    os.makedirs(preview_dir, exist_ok=True)
+
+    cache_key = hashlib.md5(f"{path}|{max_size}".encode()).hexdigest()
+    preview_path = os.path.join(preview_dir, f"{cache_key}.jpg")
+
+    # 缓存有效（比源文件新）则直接返回
+    if os.path.exists(preview_path) and os.path.getmtime(preview_path) >= os.path.getmtime(path):
+        return FileResponse(preview_path)
+
+    try:
+        from PIL import Image, ImageOps
+        with Image.open(path) as img:
+            img = ImageOps.exif_transpose(img) or img
+            img.thumbnail((max_size, max_size))
+            if img.mode not in ("RGB", "L"):
+                img = img.convert("RGB")
+            img.save(preview_path, "JPEG", quality=88)
+    except Exception:
+        # 生成失败时回退原图
+        return FileResponse(path)
+
+    return FileResponse(preview_path)
 
 
 # ============ 路径历史管理 ============
@@ -501,7 +518,7 @@ async def reorder_paths(body: dict):
 
 @router.get("/serve")
 async def serve_file(path: str):
-    """从任意路径提供文件（用于自定义输出目录）"""
+    """提供图片文件（仅限白名单目录，用于自定义输出目录）"""
     from fastapi.responses import FileResponse
 
     # 安全检查：只允许读取图片文件
@@ -509,6 +526,9 @@ async def serve_file(path: str):
     ext = os.path.splitext(path)[1].lower()
     if ext not in allowed_ext:
         raise HTTPException(status_code=400, detail="不支持的文件类型")
+
+    if not is_path_allowed(path):
+        raise HTTPException(status_code=403, detail="路径不在允许的目录内")
 
     if not os.path.exists(path) or not os.path.isfile(path):
         raise HTTPException(status_code=404, detail="文件不存在")

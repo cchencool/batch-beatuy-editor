@@ -1,17 +1,14 @@
 """
 完整处理流水线
-整合人脸检测、识别、分割和磨皮
+整合人脸检测、识别、分割和磨皮（检测与识别统一由 InsightFace 一次完成）
 """
 import cv2
 import numpy as np
 from typing import List, Dict, Optional
 import os
 import time
-import threading
-from datetime import datetime
 from PIL import Image
 
-from app.core.detector import FaceDetector
 from app.core.recognizer import FaceRecognizer
 from app.core.segmentor import SkinSegmentor
 from app.core.beautifier import SkinBeautifier
@@ -45,19 +42,23 @@ class BeautyPipeline:
 
     def __init__(
         self,
-        persons: List,
+        persons: List[Dict],
         strength: int = 50,
         edge_protection: int = 70,
         detail_preserve: int = 60,
         enable_optimization: bool = True
     ):
+        """
+        Args:
+            persons: 纯数据字典列表（不传入ORM对象，避免跨线程使用session对象），
+                     每个元素含 id/name/reference_photos/face_embeddings
+        """
         self.persons = persons
         self.strength = strength
         self.edge_protection = edge_protection
         self.detail_preserve = detail_preserve
         self.enable_optimization = enable_optimization
 
-        self.detector = FaceDetector(min_detection_confidence=0.5)
         self.recognizer = FaceRecognizer(threshold=0.4)
         self.segmentor = SkinSegmentor()
         self.beautifier = SkinBeautifier(
@@ -66,27 +67,26 @@ class BeautyPipeline:
             detail_preserve=detail_preserve
         )
 
+        # 需要持久化的 embedding 缓存：{person_id: {"version":..., "data":...}}
+        self.updated_embeddings: Dict[int, Dict] = {}
         self.target_embeddings = self._load_target_embeddings()
-
-        # 线程安全：InsightFace 不是线程安全的，使用锁保护
-        self._recognizer_lock = threading.Lock()
 
     def _load_target_embeddings(self) -> List[Dict]:
         """加载目标人员的embeddings（优先使用缓存）"""
-        import json
         import hashlib
 
         target_embeddings = []
 
         for person in self.persons:
-            if not person.reference_photos:
+            reference_photos = person.get("reference_photos") or []
+            if not reference_photos:
                 continue
 
             # 计算参考照片的版本哈希
-            photo_list = sorted(person.reference_photos) if person.reference_photos else []
+            photo_list = sorted(reference_photos)
             version_key = hashlib.md5("|".join(photo_list).encode()).hexdigest()
 
-            cached = person.face_embeddings or {}
+            cached = person.get("face_embeddings") or {}
             cached_version = cached.get("version", "") if isinstance(cached, dict) else ""
             cached_data = cached.get("data", []) if isinstance(cached, dict) else []
 
@@ -94,15 +94,15 @@ class BeautyPipeline:
             if cached_version == version_key and cached_data:
                 embeddings = [np.array(e, dtype=np.float32) for e in cached_data]
                 target_embeddings.append({
-                    "person_id": person.id,
-                    "person_name": person.name,
+                    "person_id": person["id"],
+                    "person_name": person.get("name", ""),
                     "embeddings": embeddings
                 })
                 continue
 
             # 没有有效缓存，重新提取
             embeddings = []
-            for photo_path in person.reference_photos:
+            for photo_path in reference_photos:
                 if not os.path.exists(photo_path):
                     continue
 
@@ -116,16 +116,15 @@ class BeautyPipeline:
 
             if embeddings:
                 target_embeddings.append({
-                    "person_id": person.id,
-                    "person_name": person.name,
+                    "person_id": person["id"],
+                    "person_name": person.get("name", ""),
                     "embeddings": embeddings
                 })
 
-                # 持久化缓存到数据库对象（由调用方 commit）
-                serialized = [e.tolist() for e in embeddings]
-                person.face_embeddings = {
+                # 记录新缓存（由调用方持久化到数据库）
+                self.updated_embeddings[person["id"]] = {
                     "version": version_key,
-                    "data": serialized
+                    "data": [e.tolist() for e in embeddings]
                 }
 
         return target_embeddings
@@ -146,8 +145,8 @@ class BeautyPipeline:
         """
         处理单张图片
         1. 降采样大图 → 检测/识别速度快
-        2. 人脸 ROI 裁剪 → 磨皮只处理局部，快 5-20×
-        3. 结果上采样回原图
+        2. InsightFace 一次调用完成检测 + embedding + 关键点
+        3. 人脸 ROI 裁剪 → 磨皮只处理局部
         """
         start_time = time.time()
 
@@ -175,6 +174,8 @@ class BeautyPipeline:
                 return result
 
             orig_h, orig_w = image.shape[:2]
+            result["image_width"] = orig_w
+            result["image_height"] = orig_h
             scale = _calc_scale(orig_w, orig_h) if self.enable_optimization else 1.0
 
             # 降采样（仅在启用优化时）
@@ -183,8 +184,8 @@ class BeautyPipeline:
             else:
                 small_img = image
 
-            # 步骤1：在降采样图上检测人脸
-            faces = self.detector.detect_and_crop(small_img)
+            # 步骤1+2：一次调用完成人脸检测与 embedding 提取
+            faces = self.recognizer.detect_faces(small_img)
             result["faces_detected"] = len(faces)
 
             if len(faces) == 0:
@@ -193,25 +194,24 @@ class BeautyPipeline:
                 self._copy_to_output(image_path, output_dir, filename, result)
                 return result
 
-            # 步骤2：识别目标人员（在降采样图上）
+            # 步骤3：识别目标人员
             target_faces = []
             for face in faces:
-                with self._recognizer_lock:
-                    emb = self.recognizer.extract_embedding(small_img, face['bbox'])
+                emb = face.get("embedding")
                 if emb is None:
                     continue
 
                 person_id, distance = self.recognizer.match_person(emb, self.target_embeddings)
                 if person_id is not None:
-                    bbox_scaled = [
-                        int(face['bbox'][0] / scale),
-                        int(face['bbox'][1] / scale),
-                        int(face['bbox'][2] / scale),
-                        int(face['bbox'][3] / scale),
-                    ]
+                    # bbox 与关键点换算回原图坐标
+                    face["bbox"] = [int(v / scale) for v in face["bbox"]]
+                    if face.get("keypoints"):
+                        face["keypoints"] = {
+                            k: (int(kx / scale), int(ky / scale))
+                            for k, (kx, ky) in face["keypoints"].items()
+                        }
                     face["matched_person_id"] = person_id
                     face["match_distance"] = distance
-                    face["bbox"] = bbox_scaled  # 回原图坐标
                     target_faces.append(face)
 
             result["targets_matched"] = len(target_faces)
@@ -227,7 +227,7 @@ class BeautyPipeline:
                 self._copy_to_output(image_path, output_dir, filename, result)
                 return result
 
-            # 步骤3：磨皮处理
+            # 步骤4：磨皮处理
             output_image = image.copy()
 
             if self.enable_optimization:
@@ -241,7 +241,7 @@ class BeautyPipeline:
                     roi_keypoints = {}
                     if face.get('keypoints'):
                         for k, (kx, ky) in face['keypoints'].items():
-                            roi_keypoints[k] = (int(kx / scale) - x1, int(ky / scale) - y1)
+                            roi_keypoints[k] = (kx - x1, ky - y1)
 
                     skin_mask = self.segmentor.get_face_skin_mask(
                         face_roi, roi_bbox,
@@ -260,7 +260,7 @@ class BeautyPipeline:
                     )
                     output_image = self.beautifier.beautify_with_detail(output_image, skin_mask)
 
-            # 步骤4：保存结果
+            # 步骤5：保存结果
             output_filename = f"beautified_{filename}"
             output_path = os.path.join(output_dir, output_filename)
             cv2.imwrite(output_path, output_image)
@@ -292,9 +292,8 @@ class BeautyPipeline:
         thumb_dir = os.path.join(output_dir, "thumbnails")
         os.makedirs(thumb_dir, exist_ok=True)
 
-        thumb = image.copy()
         max_size = 200
-        h, w = thumb.shape[:2]
+        h, w = image.shape[:2]
         if h > w:
             new_h = max_size
             new_w = int(w * max_size / h)
@@ -302,15 +301,7 @@ class BeautyPipeline:
             new_w = max_size
             new_h = int(h * max_size / w)
 
-        thumb = cv2.resize(thumb, (new_w, new_h))
+        thumb = cv2.resize(image, (new_w, new_h))
         thumb_path = os.path.join(thumb_dir, f"{file_id}_thumb.jpg")
         cv2.imwrite(thumb_path, thumb)
         return thumb_path
-
-    def __del__(self):
-        if hasattr(self, 'detector'):
-            del self.detector
-        if hasattr(self, 'recognizer'):
-            del self.recognizer
-        if hasattr(self, 'segmentor'):
-            del self.segmentor

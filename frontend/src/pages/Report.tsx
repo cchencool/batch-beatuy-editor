@@ -32,11 +32,29 @@ export function Report() {
     if (tasks.length === 0) {
       tasksApi.list().then(res => setTasks(res.tasks)).catch(() => {});
     }
-  }, []);
+  }, [tasks.length, setTasks]);
 
+  // 列表项不含 results，选中任务时始终拉取完整详情
+  const firstTaskId = tasks[0]?.id;
   useEffect(() => {
-    loadData();
-  }, [taskId, tasks]);
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const id = taskId ? parseInt(taskId) : firstTaskId;
+        if (id) {
+          const task = await tasksApi.get(id);
+          if (!cancelled) setSelectedTask(task);
+        }
+      } catch (error) {
+        console.error('Failed to load task:', error);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [taskId, firstTaskId]);
 
   useEffect(() => {
     // Poll progress if task is processing
@@ -50,7 +68,7 @@ export function Report() {
             // Reload task
             const updated = await tasksApi.get(selectedTask.id);
             setSelectedTask(updated);
-            setTasks(tasks.map((t) => (t.id === updated.id ? updated : t)));
+            setTasks(useAppStore.getState().tasks.map((t) => (t.id === updated.id ? updated : t)));
           }
         } catch (error) {
           console.error('Failed to get progress:', error);
@@ -58,23 +76,7 @@ export function Report() {
       }, 1000);
       return () => clearInterval(interval);
     }
-  }, [selectedTask?.status, selectedTask?.id]);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      if (taskId) {
-        const task = await tasksApi.get(parseInt(taskId));
-        setSelectedTask(task);
-      } else if (tasks.length > 0) {
-        setSelectedTask(tasks[0]);
-      }
-    } catch (error) {
-      console.error('Failed to load task:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [selectedTask?.status, selectedTask?.id, setTasks]);
 
   const handleDownload = async () => {
     if (!selectedTask) return;
@@ -101,7 +103,7 @@ export function Report() {
       addToast('任务已重新开始处理', 'success');
       const updated = await tasksApi.get(selectedTask.id);
       setSelectedTask(updated);
-      setTasks(tasks.map((t) => (t.id === updated.id ? updated : t)));
+      setTasks(useAppStore.getState().tasks.map((t) => (t.id === updated.id ? updated : t)));
     } catch (error) {
       addToast('重新处理失败', 'error');
     }
