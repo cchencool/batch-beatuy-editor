@@ -95,6 +95,14 @@ class TaskCreate(BaseModel):
     output_dir: Optional[str] = Field(None, description="自定义输出目录（可选）")
 
 
+class FaceDetail(BaseModel):
+    """已匹配目标人脸的位置与身份信息"""
+    bbox: List[int]
+    person_id: int
+    person_name: str
+    match_distance: Optional[float] = None
+
+
 class ImageResult(BaseModel):
     """单张图片处理结果"""
     file_id: str
@@ -104,6 +112,7 @@ class ImageResult(BaseModel):
     targets_matched: int = 0
     match_distance: Optional[float] = None
     face_bboxes: Optional[List[List[int]]] = None
+    face_details: Optional[List[FaceDetail]] = None
     image_width: Optional[int] = None  # 原图宽度（用于前端人脸定位）
     image_height: Optional[int] = None  # 原图高度
     output_path: Optional[str] = None

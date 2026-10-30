@@ -63,3 +63,36 @@ def test_process_missing_file_returns_failed(tmp_path):
     result = pipeline.process_image(str(tmp_path / "nope.jpg"), str(tmp_path))
     assert result["status"] == "failed"
     assert result["error_message"]
+
+
+def test_process_image_includes_matched_person_details(tmp_path, monkeypatch):
+    """目标人脸结果保留 bbox 与匹配人员身份"""
+    img_path = tmp_path / "face.jpg"
+    cv2.imwrite(str(img_path), np.full((100, 100, 3), 128, dtype=np.uint8))
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+
+    pipeline = BeautyPipeline(persons=[])
+    pipeline.target_embeddings = [{
+        "person_id": 7,
+        "person_name": "张三",
+        "embeddings": [np.ones(512, dtype=np.float32)],
+    }]
+    monkeypatch.setattr(pipeline.recognizer, "detect_faces", lambda _img: [{
+        "bbox": [10, 20, 30, 40],
+        "embedding": np.ones(512, dtype=np.float32),
+        "keypoints": {},
+    }])
+    monkeypatch.setattr(pipeline.recognizer, "match_person", lambda *_args: (7, 0.123456))
+    monkeypatch.setattr(pipeline.segmentor, "get_face_skin_mask", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(pipeline.beautifier, "beautify_with_detail", lambda img, _mask: img)
+
+    result = pipeline.process_image(str(img_path), str(output_dir))
+
+    assert result["status"] == "success"
+    assert result["face_details"] == [{
+        "bbox": [10, 20, 30, 40],
+        "person_id": 7,
+        "person_name": "张三",
+        "match_distance": 0.1235,
+    }]

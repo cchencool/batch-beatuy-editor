@@ -36,6 +36,13 @@ export interface BeautifyParams {
   detail_preserve: number;
 }
 
+export interface FaceDetail {
+  bbox: number[];
+  person_id: number;
+  person_name: string;
+  match_distance?: number;
+}
+
 // 图片处理结果
 export interface ImageResult {
   file_id: string;
@@ -45,6 +52,7 @@ export interface ImageResult {
   targets_matched: number;
   match_distance?: number;
   face_bboxes?: number[][];
+  face_details?: FaceDetail[];
   image_width?: number;
   image_height?: number;
   output_path?: string;

@@ -217,6 +217,11 @@ export function Report() {
                   style={{ width: `${progress.progress_percent}%` }}
                 />
               </div>
+              {progress.current_file && (
+                <p className="text-xs text-muted-foreground mt-1.5 truncate">
+                  正在处理：{progress.current_file}
+                </p>
+              )}
             </div>
           )}
         </CardContent>

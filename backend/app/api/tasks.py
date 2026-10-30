@@ -52,6 +52,7 @@ def _result_to_image_result(r: dict) -> ImageResult:
         targets_matched=r.get("targets_matched", 0),
         match_distance=r.get("match_distance"),
         face_bboxes=r.get("face_bboxes"),
+        face_details=r.get("face_details"),
         image_width=r.get("image_width"),
         image_height=r.get("image_height"),
         output_path=r.get("output_path"),

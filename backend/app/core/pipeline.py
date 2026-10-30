@@ -196,6 +196,10 @@ class BeautyPipeline:
 
             # 步骤3：识别目标人员
             target_faces = []
+            person_names = {
+                person["person_id"]: person.get("person_name", "")
+                for person in self.target_embeddings
+            }
             for face in faces:
                 emb = face.get("embedding")
                 if emb is None:
@@ -220,6 +224,15 @@ class BeautyPipeline:
                 min_distance = min(f.get("match_distance", float('inf')) for f in target_faces)
                 result["match_distance"] = round(float(min_distance), 4)
                 result["face_bboxes"] = [f['bbox'] for f in target_faces]
+                result["face_details"] = [
+                    {
+                        "bbox": f["bbox"],
+                        "person_id": f["matched_person_id"],
+                        "person_name": person_names.get(f["matched_person_id"], ""),
+                        "match_distance": round(float(f["match_distance"]), 4),
+                    }
+                    for f in target_faces
+                ]
 
             if len(target_faces) == 0:
                 result["status"] = "no_target"

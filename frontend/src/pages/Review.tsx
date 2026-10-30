@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Check, AlertTriangle, Maximize2, ZoomIn, ZoomOut, RotateCcw, Focus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, AlertTriangle, Maximize2, ZoomIn, ZoomOut, RotateCcw, Focus, ChevronsLeftRight } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { tasksApi, filesApi } from '../services/api';
-import type { Task, ImageResult } from '../types';
+import type { Task, ImageResult, FaceDetail } from '../types';
 
 export function Review() {
   const { taskId } = useParams();
@@ -12,6 +12,13 @@ export function Review() {
   const [task, setTask] = useState<Task | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showSlider, setShowSlider] = useState(true);
+  const [showFaceBoxes, setShowFaceBoxes] = useState(true);
+  const [hoveredFace, setHoveredFace] = useState<{
+    name: string;
+    distance?: number;
+    x: number;
+    y: number;
+  } | null>(null);
   const [sliderPosition, setSliderPosition] = useState(50);
   const [loading, setLoading] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -29,6 +36,11 @@ export function Review() {
   const spacePressed = useRef(false);
   // 分隔线拖拽状态
   const isDraggingDivider = useRef(false);
+  // 平移手势状态（光标反馈 + 区分点击与拖拽）
+  const [isPanning, setIsPanning] = useState(false);
+  const panMoved = useRef(0);
+  const clickTimer = useRef<number | null>(null);
+  const thumbNavRef = useRef<HTMLDivElement>(null);
   // 图片原始尺寸
   const [imgNatural, setImgNatural] = useState({ w: 0, h: 0 });
   const imgNaturalRef = useRef({ w: 0, h: 0 });
@@ -51,6 +63,7 @@ export function Review() {
     setScale(1);
     setTranslateX(0);
     setTranslateY(0);
+    setHoveredFace(null);
   }, [currentIndex]);
 
   const loadLatestTask = async () => {
@@ -171,60 +184,130 @@ export function Review() {
     document.addEventListener('mouseup', handleMouseUp);
   };
 
-  // 点击容器快速移动分隔线到点击处
+  // 单击容器移动分隔线（延迟200ms以区分双击；拖拽平移后不触发）
   const handleContainerClick = (e: React.MouseEvent) => {
     if (!showSlider || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const W = rect.width;
-    const center = W / 2;
-    const s = scaleRef.current;
-    const tx = translateXRef.current;
-    const localX = (mouseX - center - tx) / s + center;
-    setSliderPosition(Math.max(0, Math.min(100, (localX / W) * 100)));
+    if (panMoved.current > 4) return;
+
+    const { clientX } = e;
+    if (clickTimer.current) window.clearTimeout(clickTimer.current);
+    clickTimer.current = window.setTimeout(() => {
+      clickTimer.current = null;
+      const container = containerRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const mouseX = clientX - rect.left;
+      const W = rect.width;
+      const center = W / 2;
+      const s = scaleRef.current;
+      const tx = translateXRef.current;
+      const localX = (mouseX - center - tx) / s + center;
+      setSliderPosition(Math.max(0, Math.min(100, (localX / W) * 100)));
+    }, 200);
   };
 
-  // 鼠标滚轮缩放（以鼠标位置为中心）
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
+  // 双击：放大状态复位，否则以点击位置为中心放大到2倍
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    if (clickTimer.current) {
+      window.clearTimeout(clickTimer.current);
+      clickTimer.current = null;
+    }
+    if (scaleRef.current > 1) {
+      resetZoom();
+    } else {
+      zoomAtPoint(e.clientX, e.clientY, 1, 2);
+    }
+  };
+
+  // 切换图片时，缩略图导航中的当前项自动滚动到可视区域
+  useEffect(() => {
+    thumbNavRef.current
+      ?.querySelector('[data-active="true"]')
+      ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [currentIndex]);
+
+  // 卸载时清理未执行的单击定时器
+  useEffect(() => () => {
+    if (clickTimer.current) window.clearTimeout(clickTimer.current);
+  }, []);
+
+  // 以指定屏幕坐标为中心缩放（滚轮与双击共用）
+  const zoomAtPoint = (clientX: number, clientY: number, factor: number, absoluteScale?: number) => {
     const container = containerRef.current;
     if (!container) return;
 
     const rect = container.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-    const W = rect.width;
-    const H = rect.height;
-    const cx = W / 2;
-    const cy = H / 2;
+    const mouseX = clientX - rect.left;
+    const mouseY = clientY - rect.top;
+    const cx = rect.width / 2;
+    const cy = rect.height / 2;
 
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
     const s = scaleRef.current;
     const tx = translateXRef.current;
     const ty = translateYRef.current;
-
-    const newScale = Math.max(0.5, Math.min(5, s * delta));
+    const newScale = Math.max(0.5, Math.min(5, absoluteScale ?? s * factor));
 
     // 保持鼠标下方图片点不变：
     // screenX = (imgX - cx) * s + cx + tx  →  imgX = (screenX - cx - tx) / s + cx
-    // 缩放后想让 imgX 仍位于 screenX：
-    // screenX = (imgX - cx) * newS + cx + newTx → newTx = screenX - cx - (imgX - cx) * newS
     const imgX = (mouseX - cx - tx) / s + cx;
     const imgY = (mouseY - cy - ty) / s + cy;
-    const newTx = mouseX - cx - (imgX - cx) * newScale;
-    const newTy = mouseY - cy - (imgY - cy) * newScale;
 
     setScale(newScale);
-    setTranslateX(newTx);
-    setTranslateY(newTy);
-  }, []);
+    setTranslateX(mouseX - cx - (imgX - cx) * newScale);
+    setTranslateY(mouseY - cy - (imgY - cy) * newScale);
+  };
 
-  // 鼠标按下：右键/空格拖拽=平移，否则由分隔线处理
+  // 在预览区域内接管滚轮与 Trackpad 捏合，避免触发浏览器整页缩放
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setHoveredFace(null);
+
+      const unit = e.deltaMode === WheelEvent.DOM_DELTA_LINE
+        ? 16
+        : e.deltaMode === WheelEvent.DOM_DELTA_PAGE
+          ? container.clientHeight
+          : 1;
+      const isPinch = e.ctrlKey || e.metaKey;
+      const sensitivity = isPinch ? 0.01 : 0.0018;
+      zoomAtPoint(e.clientX, e.clientY, Math.exp(-e.deltaY * unit * sensitivity));
+    };
+
+    // Safari 的 Trackpad 捏合通过 gesture 事件而不是 ctrl+wheel 触发
+    let gestureStartScale = 1;
+    const onGestureStart = (e: Event) => {
+      e.preventDefault();
+      gestureStartScale = scaleRef.current;
+    };
+    const onGestureChange = (e: Event) => {
+      e.preventDefault();
+      const gesture = e as Event & { scale: number; clientX: number; clientY: number };
+      zoomAtPoint(gesture.clientX, gesture.clientY, 1, gestureStartScale * gesture.scale);
+    };
+
+    container.addEventListener('wheel', onWheel, { passive: false });
+    container.addEventListener('gesturestart', onGestureStart);
+    container.addEventListener('gesturechange', onGestureChange);
+    return () => {
+      container.removeEventListener('wheel', onWheel);
+      container.removeEventListener('gesturestart', onGestureStart);
+      container.removeEventListener('gesturechange', onGestureChange);
+    };
+  }, [loading, task, currentIndex]);
+
+  // 鼠标按下：放大后左键直接平移；右键或空格+左键任意缩放级别均可平移
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 2 || (spacePressed.current && scale > 1)) {
-      // 右键 或 空格+左键 → 拖拽平移
+    if (e.button === 2 || (e.button === 0 && (scale > 1 || spacePressed.current))) {
       isDraggingImage.current = true;
+      setIsPanning(true);
+      setHoveredFace(null);
+      panMoved.current = 0;
       lastMouse.current = { x: e.clientX, y: e.clientY };
+      e.preventDefault();
     }
   };
 
@@ -232,6 +315,7 @@ export function Review() {
     if (isDraggingImage.current) {
       const dx = e.clientX - lastMouse.current.x;
       const dy = e.clientY - lastMouse.current.y;
+      panMoved.current += Math.abs(dx) + Math.abs(dy);
       lastMouse.current = { x: e.clientX, y: e.clientY };
       setTranslateX(prev => prev + dx);
       setTranslateY(prev => prev + dy);
@@ -240,6 +324,7 @@ export function Review() {
 
   const handleMouseUp = () => {
     isDraggingImage.current = false;
+    setIsPanning(false);
   };
 
   const resetZoom = () => {
@@ -339,11 +424,33 @@ export function Review() {
     ? filesApi.getImageUrl(currentResult.output_path || '')
     : filesApi.getPreviewUrl(currentResult.output_path || '');
 
+  const faceOverlays: FaceDetail[] = currentResult.face_details ?? (currentResult.face_bboxes ?? []).map((bbox) => ({
+    bbox,
+    person_id: -1,
+    person_name: '目标人员',
+  }));
+  const faceImageWidth = currentResult.image_width || imgNatural.w;
+  const faceImageHeight = currentResult.image_height || imgNatural.h;
+
   const handleImgLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
     if (img.naturalWidth > 0) {
       setImgNatural({ w: img.naturalWidth, h: img.naturalHeight });
     }
+  };
+
+  const handleFaceHover = (e: React.MouseEvent, name: string, distance?: number) => {
+    const container = containerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    setHoveredFace({
+      name: name || '目标人员',
+      distance,
+      x: Math.max(8, Math.min(x + 14, rect.width - 180)),
+      y: Math.max(8, Math.min(y + 14, rect.height - 58)),
+    });
   };
 
   return (
@@ -383,13 +490,18 @@ export function Review() {
                 <div
                   ref={containerRef}
                   className="relative flex-1 min-h-[60vh] bg-black rounded-lg overflow-hidden"
-                  onWheel={handleWheel}
+                  style={{
+                    cursor: isPanning ? 'grabbing' : scale > 1 ? 'grab' : showSlider ? 'col-resize' : 'default',
+                    touchAction: 'none',
+                    overscrollBehavior: 'contain',
+                  }}
                   onMouseDown={handleMouseDown}
                   onMouseMove={handleMouseMove}
                   onMouseUp={handleMouseUp}
                   onMouseLeave={handleMouseUp}
                   onContextMenu={(e) => e.preventDefault()}
                   onClick={handleContainerClick}
+                  onDoubleClick={handleDoubleClick}
                 >
                   {currentResult.status === 'success' ? (
                     /* 对比模式：两张图叠放 + 分隔线 */
@@ -403,9 +515,10 @@ export function Review() {
                     >
                       {/* 底层 - 原图 */}
                       <img
+                        key={originalSrc}
                         src={originalSrc}
                         alt="Original"
-                        className="absolute inset-0 w-full h-full object-contain select-none"
+                        className="absolute inset-0 w-full h-full object-contain select-none animate-fade-in"
                         style={{
                           clipPath: showSlider ? `inset(0 ${100 - sliderPosition}% 0 0)` : undefined
                         }}
@@ -414,6 +527,7 @@ export function Review() {
 
                       {/* 上层 - 处理图 */}
                       <img
+                        key={processedSrc}
                         src={processedSrc}
                         alt="Processed"
                         className="absolute inset-0 w-full h-full object-contain select-none"
@@ -430,7 +544,7 @@ export function Review() {
                           className="absolute top-0 bottom-0 z-10 cursor-col-resize select-none"
                           style={{
                             left: `${sliderPosition}%`,
-                            width: '12px',
+                            width: '20px',
                             transform: `translateX(-50%) scaleX(${1 / scale})`,
                             transformOrigin: 'center center'
                           }}
@@ -438,6 +552,10 @@ export function Review() {
                           onClick={(e) => e.stopPropagation()}
                         >
                           <div className="w-[1.5px] h-full mx-auto bg-white shadow-lg" />
+                          {/* 中央圆形拖拽手柄 */}
+                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white/95 shadow-lg flex items-center justify-center pointer-events-none">
+                            <ChevronsLeftRight className="w-4 h-4 text-gray-600" />
+                          </div>
                         </div>
                       )}
 
@@ -447,6 +565,40 @@ export function Review() {
                           <div className="absolute top-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none select-none">原图</div>
                           <div className="absolute top-4 right-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none select-none">处理后</div>
                         </>
+                      )}
+
+                      {/* 与图片共用 viewBox 和 transform，缩放、平移时人脸框保持贴合 */}
+                      {faceImageWidth > 0 && faceImageHeight > 0 && faceOverlays.length > 0 && (
+                        <svg
+                          className="absolute inset-0 z-20 w-full h-full"
+                          viewBox={`0 0 ${faceImageWidth} ${faceImageHeight}`}
+                          preserveAspectRatio="xMidYMid meet"
+                          style={{ pointerEvents: 'none' }}
+                        >
+                          {faceOverlays.map((face, index) => {
+                            const [x, y, w, h] = face.bbox;
+                            return (
+                              <g
+                                key={`${face.person_id}-${index}`}
+                                style={{ pointerEvents: 'auto', cursor: 'help' }}
+                                onMouseEnter={(e) => handleFaceHover(e, face.person_name, face.match_distance)}
+                                onMouseMove={(e) => handleFaceHover(e, face.person_name, face.match_distance)}
+                                onMouseLeave={() => setHoveredFace(null)}
+                              >
+                                <rect
+                                  x={x}
+                                  y={y}
+                                  width={w}
+                                  height={h}
+                                  fill={showFaceBoxes ? 'rgba(34, 197, 94, 0.08)' : 'transparent'}
+                                  stroke={showFaceBoxes ? '#22c55e' : 'none'}
+                                  strokeWidth={2}
+                                  vectorEffect="non-scaling-stroke"
+                                />
+                              </g>
+                            );
+                          })}
+                        </svg>
                       )}
                     </div>
                   ) : (
@@ -460,14 +612,27 @@ export function Review() {
                       }}
                     >
                       <img
+                        key={processedSrc}
                         src={processedSrc}
                         alt={currentResult.filename}
-                        className="w-full h-full object-contain select-none"
+                        className="w-full h-full object-contain select-none animate-fade-in"
                         draggable={false}
                       />
                       <div className="absolute top-4 left-4 px-2 py-1 rounded bg-black/60 text-white text-sm pointer-events-none select-none">
                         {currentResult.status === 'no_target' ? '未匹配到目标' : '处理失败'}
                       </div>
+                    </div>
+                  )}
+
+                  {hoveredFace && (
+                    <div
+                      className="absolute z-30 max-w-52 px-3 py-2 rounded-md bg-black/85 text-white shadow-lg pointer-events-none select-none"
+                      style={{ left: hoveredFace.x, top: hoveredFace.y }}
+                    >
+                      <p className="text-sm font-medium truncate">{hoveredFace.name}</p>
+                      {hoveredFace.distance !== undefined && (
+                        <p className="text-xs text-white/70 mt-0.5">匹配距离 {hoveredFace.distance.toFixed(4)}</p>
+                      )}
                     </div>
                   )}
 
@@ -481,7 +646,7 @@ export function Review() {
                   {/* 操作提示 */}
                   {scale > 1 && (
                     <div className="absolute bottom-4 right-4 px-2 py-1 rounded bg-black/60 text-white text-xs z-20">
-                      按住空格拖拽平移
+                      双指捏合缩放 · 拖拽平移 · 双击复位
                     </div>
                   )}
                 </div>
@@ -503,13 +668,26 @@ export function Review() {
                   <Button variant={showSlider ? 'primary' : 'outline'} size="sm" onClick={() => setShowSlider(!showSlider)}>
                     对比模式
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => setScale(prev => Math.min(5, prev * 1.2))}>
+                  <label
+                    className={`flex items-center gap-1.5 text-sm select-none ${faceOverlays.length > 0 ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                    title="框选已识别并美颜的目标人脸；悬浮人脸可查看匹配人物"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={showFaceBoxes}
+                      onChange={(e) => setShowFaceBoxes(e.target.checked)}
+                      disabled={faceOverlays.length === 0}
+                      className="w-4 h-4 accent-primary cursor-pointer disabled:cursor-not-allowed"
+                    />
+                    匹配目标
+                  </label>
+                  <Button variant="outline" size="sm" onClick={() => setScale(prev => Math.min(5, prev * 1.2))} disabled={scale >= 5}>
                     <ZoomIn className="w-4 h-4" />
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => setScale(prev => Math.max(0.5, prev * 0.8))}>
+                  <Button variant="outline" size="sm" onClick={() => setScale(prev => Math.max(0.5, prev * 0.8))} disabled={scale <= 0.5}>
                     <ZoomOut className="w-4 h-4" />
                   </Button>
-                  <span className="text-xs text-muted-foreground ml-2">滚轮缩放 · 空格+拖拽平移</span>
+                  <span className="text-xs text-muted-foreground ml-2">双指捏合 / 滚轮缩放 · 拖拽平移 · 双击缩放</span>
                 </div>
                 <Button variant="outline" onClick={() => setCurrentIndex(prev => Math.min(task.results.length - 1, prev + 1))} disabled={currentIndex === task.results.length - 1}>
                   下一张<ChevronRight className="w-4 h-4 ml-1" />
@@ -551,11 +729,13 @@ export function Review() {
         <div className={`${isFullscreen ? 'w-48' : 'w-64'} flex-shrink-0`}>
           <Card className="h-full">
             <CardContent className="p-4 h-full overflow-y-auto">
-              <h3 className="font-medium mb-3">缩略图导航</h3>
-              <div className="grid grid-cols-2 gap-2">
-                {task.results.map((result, index) => (
-                  <ThumbnailItem key={result.file_id} result={result} isActive={index === currentIndex} onClick={() => setCurrentIndex(index)} />
-                ))}
+              <div ref={thumbNavRef}>
+                <h3 className="font-medium mb-3">缩略图导航</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {task.results.map((result, index) => (
+                    <ThumbnailItem key={result.file_id} result={result} isActive={index === currentIndex} onClick={() => setCurrentIndex(index)} />
+                  ))}
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -569,9 +749,10 @@ export function Review() {
             <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
               <span><kbd className="px-1.5 py-0.5 bg-muted rounded">←</kbd><kbd className="px-1.5 py-0.5 bg-muted rounded">→</kbd> 切换</span>
               <span><kbd className="px-1.5 py-0.5 bg-muted rounded">F</kbd> 全屏</span>
-              <span><kbd className="px-1.5 py-0.5 bg-muted rounded">滚轮</kbd> 缩放</span>
+              <span><kbd className="px-1.5 py-0.5 bg-muted rounded">捏合 / 滚轮</kbd> 缩放</span>
+              <span><kbd className="px-1.5 py-0.5 bg-muted rounded">双击</kbd> 缩放/复位</span>
               <span><kbd className="px-1.5 py-0.5 bg-muted rounded">0</kbd> 重置</span>
-              <span><kbd className="px-1.5 py-0.5 bg-muted rounded">空格</kbd>+拖拽 平移</span>
+              <span><kbd className="px-1.5 py-0.5 bg-muted rounded">拖拽</kbd> 平移</span>
             </div>
           </CardContent>
         </Card>
@@ -584,6 +765,7 @@ function ThumbnailItem({ result, isActive, onClick }: { result: ImageResult; isA
   const statusColors = { success: 'ring-green-500', no_target: 'ring-yellow-500', failed: 'ring-red-500' };
   return (
     <div
+      data-active={isActive}
       className={`relative aspect-square rounded-lg overflow-hidden cursor-pointer ring-2 transition-all ${isActive ? statusColors[result.status] : 'ring-transparent hover:ring-muted-foreground/50'}`}
       onClick={onClick}
     >
